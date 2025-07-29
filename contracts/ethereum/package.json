@@ -1,0 +1,27 @@
+{
+  "name": "fusionbridge-ethereum",
+  "version": "1.0.0",
+  "description": "Ethereum contracts for FusionBridge",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test",
+    "compile": "hardhat compile",
+    "build": "hardhat compile",
+    "deploy": "hardhat run scripts/deploy.js",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network mainnet"
+  },
+  "keywords": ["ethereum", "bridge", "defi", "1inch"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "hardhat": "^2.26.1"
+  },
+  "dependencies": {
+    "@1inch/fusion-sdk": "^2.3.5",
+    "ethers": "^6.15.0"
+  }
+}

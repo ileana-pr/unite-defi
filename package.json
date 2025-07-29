@@ -11,18 +11,22 @@
     "build:ethereum": "cd contracts/ethereum && npm run build",
     "build:aptos": "cd contracts/aptos && aptos move build",
     "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
     "test": "npm run test:ethereum && npm run test:aptos",
     "test:ethereum": "cd contracts/ethereum && npm run test",
     "test:aptos": "cd contracts/aptos && aptos move test",
+    "test:frontend": "cd frontend && npm run test",
+    "test:backend": "cd backend && npm run test",
     "deploy": "npm run deploy:ethereum && npm run deploy:aptos",
     "deploy:ethereum": "cd contracts/ethereum && npm run deploy",
-    "deploy:aptos": "cd contracts/aptos && aptos move publish"
+    "deploy:aptos": "cd contracts/aptos && aptos move publish",
+    "install:all": "npm install && cd contracts/ethereum && npm install && cd ../../frontend && npm install && cd ../backend && npm install",
+    "setup": "npm run install:all && cp env.example .env"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
   },
   "workspaces": [
-    "contracts/ethereum",
     "frontend",
     "backend"
   ]
