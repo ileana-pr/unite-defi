@@ -7,4 +7,4 @@ upgrade_policy = "compatible"
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework", rev = "main" }
 
 [addresses]
-fusion_bridge = "_"
+fusion_bridge = "0xb7b92f174ca1106a01360010b0bff84e4cf8fcdcae22c7c672be8ecbc730ad7b"
