@@ -1,0 +1,29 @@
+{
+  "name": "fusionbridge",
+  "version": "1.0.0",
+  "description": "Atomic cross-chain bridge enabling 1inch Fusion+ swaps between Ethereum and Aptos",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "build": "npm run build:contracts && npm run build:frontend",
+    "build:contracts": "npm run build:ethereum && npm run build:aptos",
+    "build:ethereum": "cd contracts/ethereum && npm run build",
+    "build:aptos": "cd contracts/aptos && aptos move build",
+    "build:frontend": "cd frontend && npm run build",
+    "test": "npm run test:ethereum && npm run test:aptos",
+    "test:ethereum": "cd contracts/ethereum && npm run test",
+    "test:aptos": "cd contracts/aptos && aptos move test",
+    "deploy": "npm run deploy:ethereum && npm run deploy:aptos",
+    "deploy:ethereum": "cd contracts/ethereum && npm run deploy",
+    "deploy:aptos": "cd contracts/aptos && aptos move publish"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "contracts/ethereum",
+    "frontend",
+    "backend"
+  ]
+}
