@@ -1,5 +1,5 @@
 import { useState } from "react"
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
 
@@ -18,13 +18,13 @@ export default function Navbar() {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-8">
-          <Link href="#how-it-works" className="text-slate-300 hover:text-white transition-colors">
+          <Link to="#how-it-works" className="text-slate-300 hover:text-white transition-colors">
             How It Works
           </Link>
-          <Link href="#features" className="text-slate-300 hover:text-white transition-colors">
+          <Link to="#features" className="text-slate-300 hover:text-white transition-colors">
             Features
           </Link>
-          <Link href="#comparison" className="text-slate-300 hover:text-white transition-colors">
+          <Link to="#comparison" className="text-slate-300 hover:text-white transition-colors">
             Why Us
           </Link>
           <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
@@ -43,21 +43,21 @@ export default function Navbar() {
         <div className="md:hidden bg-slate-900 border-b border-slate-800">
           <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
             <Link
-              href="#how-it-works"
+              to="#how-it-works"
               className="text-slate-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMenuOpen(false)}
             >
               How It Works
             </Link>
             <Link
-              href="#features"
+              to="#features"
               className="text-slate-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMenuOpen(false)}
             >
               Features
             </Link>
             <Link
-              href="#comparison"
+              to="#comparison"
               className="text-slate-300 hover:text-white transition-colors py-2"
               onClick={() => setIsMenuOpen(false)}
             >

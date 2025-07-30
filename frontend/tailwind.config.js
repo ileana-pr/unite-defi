@@ -1,20 +1,11 @@
-module.exports = {
+/** @type {import('tailwindcss').Config} */
+export default {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./app/**/*.{ts,tsx}",
-    "./src/**/*.{ts,tsx}",
-    "*.{js,ts,jsx,tsx,mdx}",
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    container: {
-      center: true,
-      padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
-    },
     extend: {
       colors: {
         border: "hsl(var(--border))",
@@ -50,23 +41,6 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Custom colors for the DeFi app
-        slate: {
-          950: "#0A101F",
-          900: "#0F172A",
-          800: "#1E293B",
-          700: "#334155",
-        },
-        cyan: {
-          400: "#22D3EE",
-          500: "#06B6D4",
-          600: "#0891B2",
-        },
-        blue: {
-          500: "#3B82F6",
-          600: "#2563EB",
-          700: "#1D4ED8",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -89,5 +63,5 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [],
 }

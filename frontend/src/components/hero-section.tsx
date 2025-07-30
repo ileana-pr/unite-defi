@@ -1,12 +1,9 @@
-"use client"
-
-import type React from "react"
-
-import { useState } from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowRight, CheckCircle } from "lucide-react"
 import { motion } from "framer-motion"
+import { Link } from "react-router-dom"
 
 export default function HeroSection() {
   const [email, setEmail] = useState("")
@@ -66,9 +63,11 @@ export default function HeroSection() {
             transition={{ duration: 0.5, delay: 0.3 }}
             className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
           >
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white text-lg px-8 py-6 h-auto">
-              Get Early Access
-            </Button>
+            <Link to="/swap">
+              <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white text-lg px-8 py-6 h-auto">
+                Start Bridging
+              </Button>
+            </Link>
             <Button
               variant="outline"
               className="border-slate-700 text-white hover:bg-slate-800 text-lg px-8 py-6 h-auto bg-transparent"
