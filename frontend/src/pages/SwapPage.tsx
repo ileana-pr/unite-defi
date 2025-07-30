@@ -1,9 +1,33 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArrowLeftRight, Wallet, Shield, Zap, CheckCircle, AlertCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
+
+const API_BASE_URL = 'http://localhost:3001/api'
+
+interface Token {
+  symbol: string
+  name: string
+  chain: string
+  address: string
+  decimals: number
+}
+
+interface Quote {
+  id?: string
+  fromToken: string
+  toToken: string
+  fromAmount: string
+  toAmount: string
+  exchangeRate: string
+  bridgeFee: string
+  estimatedTime: string
+  route: {
+    steps: Array<{ chain: string; action: string }>
+  }
+}
 
 export default function SwapPage() {
   const [fromToken, setFromToken] = useState('ETH')
@@ -12,13 +36,67 @@ export default function SwapPage() {
   const [toAmount, setToAmount] = useState('')
   const [isConnected, setIsConnected] = useState(false)
   const [swapStatus, setSwapStatus] = useState<'idle' | 'connecting' | 'swapping' | 'success' | 'error'>('idle')
+  const [quote, setQuote] = useState<Quote | null>(null)
+  const [tokens, setTokens] = useState<Token[]>([])
+  const [loading, setLoading] = useState(false)
 
-  const tokens = [
-    { symbol: 'ETH', name: 'Ethereum', chain: 'Ethereum', icon: '🔵' },
-    { symbol: 'APT', name: 'Aptos', chain: 'Aptos', icon: '🟣' },
-    { symbol: 'USDC', name: 'USD Coin', chain: 'Ethereum', icon: '🔵' },
-    { symbol: 'USDT', name: 'Tether', chain: 'Ethereum', icon: '🔵' },
-  ]
+  // Fetch supported tokens on component mount
+  useEffect(() => {
+    fetchTokens()
+  }, [])
+
+  // Fetch quote when amount or tokens change
+  useEffect(() => {
+    if (fromAmount && fromToken && toToken) {
+      fetchQuote()
+    } else {
+      setQuote(null)
+      setToAmount('')
+    }
+  }, [fromAmount, fromToken, toToken])
+
+  const fetchTokens = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tokens`)
+      const data = await response.json()
+      if (data.success) {
+        setTokens(data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching tokens:', error)
+    }
+  }
+
+  const fetchQuote = async () => {
+    if (!fromAmount || parseFloat(fromAmount) <= 0) return
+    
+    setLoading(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/bridge/quote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fromToken,
+          toToken,
+          amount: fromAmount,
+          fromChain: 'ethereum',
+          toChain: 'aptos'
+        })
+      })
+      
+      const data = await response.json()
+      if (data.success) {
+        setQuote(data.data)
+        setToAmount(data.data.toAmount)
+      }
+    } catch (error) {
+      console.error('Error fetching quote:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleConnectWallet = () => {
     setIsConnected(true)
@@ -26,10 +104,64 @@ export default function SwapPage() {
     setTimeout(() => setSwapStatus('idle'), 2000)
   }
 
-  const handleSwap = () => {
-    if (!fromAmount || !toAmount) return
+  const handleSwap = async () => {
+    if (!fromAmount || !toAmount || !quote) return
+    
     setSwapStatus('swapping')
-    setTimeout(() => setSwapStatus('success'), 3000)
+    try {
+      const response = await fetch(`${API_BASE_URL}/bridge/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quoteId: quote.id || 'mock_quote',
+          userAddress: '0x123...', // Mock address - replace with actual wallet
+          fromChain: 'ethereum',
+          toChain: 'aptos'
+        })
+      })
+      
+      const data = await response.json()
+      if (data.success) {
+        // Poll for status updates
+        pollTransactionStatus(data.data.transactionId)
+      } else {
+        setSwapStatus('error')
+      }
+    } catch (error) {
+      console.error('Error executing bridge:', error)
+      setSwapStatus('error')
+    }
+  }
+
+  const pollTransactionStatus = async (transactionId: string) => {
+    const maxAttempts = 10
+    let attempts = 0
+    
+    const poll = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/bridge/status/${transactionId}`)
+        const data = await response.json()
+        
+        if (data.success && data.data.status === 'completed') {
+          setSwapStatus('success')
+          return
+        }
+        
+        attempts++
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 3000) // Poll every 3 seconds
+        } else {
+          setSwapStatus('error')
+        }
+      } catch (error) {
+        console.error('Error polling status:', error)
+        setSwapStatus('error')
+      }
+    }
+    
+    poll()
   }
 
   const handleSwitchTokens = () => {
@@ -119,7 +251,7 @@ export default function SwapPage() {
                 >
                   {tokens.map((token) => (
                     <option key={token.symbol} value={token.symbol}>
-                      {token.icon} {token.symbol}
+                      {token.symbol}
                     </option>
                   ))}
                 </select>
@@ -151,6 +283,7 @@ export default function SwapPage() {
                     value={toAmount}
                     onChange={(e) => setToAmount(e.target.value)}
                     className="bg-transparent border-none text-white text-2xl font-bold p-0 h-auto"
+                    disabled
                   />
                 </div>
                 <select
@@ -160,7 +293,7 @@ export default function SwapPage() {
                 >
                   {tokens.map((token) => (
                     <option key={token.symbol} value={token.symbol}>
-                      {token.icon} {token.symbol}
+                      {token.symbol}
                     </option>
                   ))}
                 </select>
@@ -168,22 +301,34 @@ export default function SwapPage() {
             </div>
 
             {/* Swap Details */}
-            <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700 mb-6">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Exchange Rate</span>
-                  <span className="text-white">1 {fromToken} = 1,500 {toToken}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Bridge Fee</span>
-                  <span className="text-white">0.1%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Estimated Time</span>
-                  <span className="text-white">~45 seconds</span>
+            {quote && (
+              <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700 mb-6">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Exchange Rate</span>
+                    <span className="text-white">1 {fromToken} = {quote.exchangeRate} {toToken}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Bridge Fee</span>
+                    <span className="text-white">{quote.bridgeFee}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Estimated Time</span>
+                    <span className="text-white">{quote.estimatedTime}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Loading State */}
+            {loading && (
+              <div className="mb-6 p-4 rounded-lg border border-slate-700">
+                <div className="flex items-center gap-2 text-blue-400">
+                  <Zap className="w-4 h-4 animate-spin" />
+                  <span>Getting quote...</span>
+                </div>
+              </div>
+            )}
 
             {/* Status Display */}
             {swapStatus !== 'idle' && (
@@ -218,7 +363,7 @@ export default function SwapPage() {
             {/* Bridge Button */}
             <Button
               onClick={handleSwap}
-              disabled={!isConnected || !fromAmount || !toAmount || swapStatus === 'swapping'}
+              disabled={!isConnected || !fromAmount || !toAmount || !quote || swapStatus === 'swapping' || loading}
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white py-4 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {swapStatus === 'swapping' ? (

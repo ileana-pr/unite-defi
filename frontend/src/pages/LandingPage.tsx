@@ -1,6 +1,5 @@
 import Navbar from '@/components/navbar'
 import HeroSection from '@/components/hero-section'
-import ProblemSection from '@/components/problem-section'
 import SolutionSection from '@/components/solution-section'
 import FeaturesSection from '@/components/features-section'
 import ComparisonSection from '@/components/comparison-section'
@@ -12,7 +11,6 @@ export default function LandingPage() {
     <div className="min-h-screen bg-slate-950">
       <Navbar />
       <HeroSection />
-      <ProblemSection />
       <SolutionSection />
       <FeaturesSection />
       <ComparisonSection />

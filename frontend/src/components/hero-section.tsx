@@ -100,68 +100,7 @@ export default function HeroSection() {
           </motion.form>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.5 }}
-          className="relative mx-auto mt-16 max-w-5xl"
-        >
-          <div className="aspect-[16/9] rounded-xl overflow-hidden border border-slate-800 shadow-2xl shadow-cyan-500/10">
-            <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-              <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 p-8 flex items-center justify-center">
-                <div className="w-full max-w-3xl">
-                  <div className="bg-slate-900 rounded-xl border border-slate-700 p-6 shadow-lg">
-                    <div className="flex justify-between items-center mb-6">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600"></div>
-                        <span className="font-medium text-white">1inch Aptos Bridge</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-                        <div className="flex justify-between mb-2">
-                          <span className="text-slate-400">From</span>
-                          <span className="text-slate-400">Ethereum</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xl font-medium">10 ETH</span>
-                          <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded-full bg-slate-600"></div>
-                            <span>ETH</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-                        <div className="flex justify-between mb-2">
-                          <span className="text-slate-400">To</span>
-                          <span className="text-slate-400">Aptos</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xl font-medium">10 ETH</span>
-                          <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded-full bg-slate-600"></div>
-                            <span>ETH</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-center py-3 rounded-lg font-medium">
-                      Bridge Assets
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-2 rounded-full text-white font-medium shadow-lg">
-            Secure • Atomic • Fast
-          </div>
-        </motion.div>
+
 
         <div className="flex flex-wrap justify-center gap-8 mt-20">
           <div className="flex items-center gap-2">
