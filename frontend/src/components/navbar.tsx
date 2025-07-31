@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
+import WalletConnect from "./WalletConnect"
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -27,9 +28,7 @@ export default function Navbar() {
           <Link to="#comparison" className="text-slate-300 hover:text-white transition-colors">
             Why Us
           </Link>
-          <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-            Get Early Access
-          </Button>
+          <WalletConnect />
         </div>
 
         {/* Mobile Menu Button */}
@@ -63,9 +62,7 @@ export default function Navbar() {
             >
               Why Us
             </Link>
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white w-full">
-              Get Early Access
-            </Button>
+            <WalletConnect />
           </div>
         </div>
       )}
