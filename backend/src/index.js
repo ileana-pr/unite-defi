@@ -7,6 +7,7 @@ require('dotenv').config();
 const OneInchService = require('./services/oneInchService');
 const TokenService = require('./services/tokenService');
 const FusionService = require('./services/fusionService');
+const ContractService = require('./services/contractService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +16,7 @@ const PORT = process.env.PORT || 3001;
 const oneInchService = new OneInchService();
 const tokenService = new TokenService();
 const fusionService = new FusionService();
+const contractService = new ContractService();
 
 // Middleware
 app.use(helmet());
@@ -22,18 +24,102 @@ app.use(cors());
 app.use(express.json());
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    services: {
-      ethereum: 'connected',
-      aptos: 'connected',
-      fusion: fusionService.isConfigured() ? 'configured' : 'pending_configuration',
-      oneinch: oneInchService.isConfigured() ? 'configured' : 'pending_configuration'
+app.get('/health', async (req, res) => {
+  try {
+    const networkInfo = await contractService.getNetworkInfo();
+    
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      services: {
+        ethereum: contractService.isConfigured() ? 'configured' : 'pending_configuration',
+        aptos: 'connected',
+        fusion: fusionService.isConfigured() ? 'configured' : 'pending_configuration',
+        oneinch: oneInchService.isConfigured() ? 'configured' : 'pending_configuration',
+        contracts: contractService.isConfigured() ? 'configured' : 'pending_configuration'
+      },
+      network: networkInfo
+    });
+  } catch (error) {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      services: {
+        ethereum: 'error',
+        aptos: 'connected',
+        fusion: fusionService.isConfigured() ? 'configured' : 'pending_configuration',
+        oneinch: oneInchService.isConfigured() ? 'configured' : 'pending_configuration',
+        contracts: contractService.isConfigured() ? 'configured' : 'pending_configuration'
+      },
+      error: error.message
+    });
+  }
+});
+
+// Test Fusion+ API connection
+app.get('/api/test/fusion', async (req, res) => {
+  try {
+    const testResult = await fusionService.testConnection();
+    res.json(testResult);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Test contract service
+app.get('/api/test/contracts', async (req, res) => {
+  try {
+    const networkInfo = await contractService.getNetworkInfo();
+    const walletAddress = contractService.getWalletAddress();
+    
+    res.json({
+      success: true,
+      configured: contractService.isConfigured(),
+      walletAddress,
+      network: networkInfo
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Switch network endpoint
+app.post('/api/switch-network', async (req, res) => {
+  try {
+    const { network } = req.body;
+    
+    if (!network) {
+      return res.status(400).json({
+        success: false,
+        error: 'Network parameter is required (mainnet, testnet, sepolia, goerli, hardhat)'
+      });
     }
-  });
+
+    const validNetworks = ['mainnet', 'testnet', 'sepolia', 'goerli', 'hardhat'];
+    if (!validNetworks.includes(network)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid network. Must be one of: ${validNetworks.join(', ')}`
+      });
+    }
+
+    // Switch networks in both services
+    const contractResult = await contractService.switchNetwork(network);
+    const fusionResult = await fusionService.switchNetwork(network);
+
+    res.json({
+      success: true,
+      message: `Switched to ${network}`,
+      contractService: contractResult,
+      fusionService: fusionResult,
+      currentNetwork: network
+    });
+  } catch (error) {
+    console.error('Network switch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Bridge API endpoints
@@ -79,8 +165,8 @@ app.post('/api/bridge/quote', async (req, res) => {
         fromChain,
         toChain,
         amount: amountInWei,
-        fromAddress: fromAddress || '0x0000000000000000000000000000000000000000',
-        toAddress: fromAddress || '0x0000000000000000000000000000000000000000',
+        fromAddress: fromAddress || '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
+        toAddress: fromAddress || '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
         slippage: 1
       });
 
@@ -121,7 +207,7 @@ app.post('/api/bridge/quote', async (req, res) => {
         fromTokenInfo.address,
         tokenService.getTokenAddress('USDC', 'ethereum'),
         amountInWei,
-        1
+        11155111 // Sepolia testnet
       );
 
       if (!quoteResult.success) {
@@ -174,12 +260,12 @@ app.post('/api/bridge/quote', async (req, res) => {
 // New Fusion+ specific endpoints
 app.post('/api/fusion/quote', async (req, res) => {
   try {
-    const { fromToken, toToken, amount, fromAddress, chainId = 1 } = req.body;
+    const { fromToken, toToken, amount, fromAddress, chainId = 11155111 } = req.body;
     
     if (!fusionService.isConfigured()) {
       return res.status(400).json({
         success: false,
-        error: 'Fusion+ service not configured'
+        error: 'Fusion+ service not configured. Please set FUSION_API_KEY in .env file'
       });
     }
 
@@ -200,12 +286,12 @@ app.post('/api/fusion/quote', async (req, res) => {
 
 app.post('/api/fusion/order', async (req, res) => {
   try {
-    const { fromToken, toToken, amount, fromAddress, slippage = 1, chainId = 1 } = req.body;
+    const { fromToken, toToken, amount, fromAddress, slippage = 1, chainId = 11155111 } = req.body;
     
     if (!fusionService.isConfigured()) {
       return res.status(400).json({
         success: false,
-        error: 'Fusion+ service not configured'
+        error: 'Fusion+ service not configured. Please set FUSION_API_KEY in .env file'
       });
     }
 
@@ -228,12 +314,12 @@ app.post('/api/fusion/order', async (req, res) => {
 app.get('/api/fusion/order/:orderHash', async (req, res) => {
   try {
     const { orderHash } = req.params;
-    const { chainId = 1 } = req.query;
+    const { chainId = 11155111 } = req.query;
     
     if (!fusionService.isConfigured()) {
       return res.status(400).json({
         success: false,
-        error: 'Fusion+ service not configured'
+        error: 'Fusion+ service not configured. Please set FUSION_API_KEY in .env file'
       });
     }
 
@@ -265,18 +351,26 @@ app.post('/api/bridge/execute', async (req, res) => {
       });
     }
 
+    // Check if contract service is configured
+    if (!contractService.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Contract service not configured. Please set PRIVATE_KEY and deploy contracts'
+      });
+    }
+
     // For now, return a structured response indicating what needs to be implemented
     const execution = {
       transactionId: `tx_${Date.now()}`,
       quoteId,
-      status: 'pending_smart_contract_integration',
+      status: 'pending_contract_deployment',
       estimatedTime: '45 seconds',
       steps: [
         { step: 1, status: 'pending', description: 'Approving token transfer' },
         { step: 2, status: 'waiting', description: 'Executing cross-chain swap' },
         { step: 3, status: 'waiting', description: 'Finalizing on destination chain' }
       ],
-      message: 'Smart contract integration required for execution'
+      message: 'Smart contracts need to be deployed to testnet first'
     };
     
     res.json({ success: true, execution });
@@ -301,7 +395,7 @@ app.get('/api/bridge/status/:transactionId', (req, res) => {
     // This should query both Ethereum and Aptos chains for transaction status
     const status = {
       transactionId,
-      status: 'pending_smart_contract_integration',
+      status: 'pending_contract_deployment',
       fromChain: 'ethereum',
       toChain: 'aptos',
       fromAmount: '10',
@@ -312,7 +406,7 @@ app.get('/api/bridge/status/:transactionId', (req, res) => {
         { step: 2, status: 'pending', timestamp: new Date(Date.now() - 15000).toISOString() },
         { step: 3, status: 'pending', timestamp: new Date().toISOString() }
       ],
-      message: 'Smart contract integration required for transaction tracking'
+      message: 'Smart contracts need to be deployed to testnet first'
     };
     
     res.json({ success: true, status });
@@ -381,6 +475,9 @@ app.use('*', (req, res) => {
     error: 'Endpoint not found',
     availableEndpoints: [
       'GET /health',
+      'GET /api/test/fusion',
+      'GET /api/test/contracts',
+      'POST /api/switch-network',
       'POST /api/bridge/quote',
       'POST /api/bridge/execute', 
       'GET /api/bridge/status/:transactionId',
@@ -400,5 +497,7 @@ app.listen(PORT, () => {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔧 1inch API: ${oneInchService.isConfigured() ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`⚡ Fusion+ API: ${fusionService.isConfigured() ? '✅ Configured' : '❌ Not configured'}`);
-  console.log(`⚠️  Smart contract integration: Pending`);
+  console.log(`🔗 Contract Service: ${contractService.isConfigured() ? '✅ Configured' : '❌ Not configured'}`);
+  console.log(`📝 Get 1inch API key: https://portal.1inch.dev/`);
+  console.log(`⚠️  Deploy contracts to testnet for full functionality`);
 }); 
