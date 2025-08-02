@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { CrossChainWalletProvider } from './contexts/WalletContext'
 import LandingPage from './pages/LandingPage'

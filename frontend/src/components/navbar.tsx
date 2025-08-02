@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { Menu, X } from "lucide-react"
-import WalletConnect from "./WalletConnect"
+import { Menu, X, Wallet } from "lucide-react"
+import { useCrossChainWallet } from "@/hooks/useCrossChainWallet"
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { isConnected, primaryWalletType, ethereumAddress, aptosAddress, disconnectWallet } = useCrossChainWallet()
 
   return (
     <nav className="sticky top-0 z-50 backdrop-blur-lg bg-slate-950/80 border-b border-slate-800">
@@ -28,7 +29,28 @@ export default function Navbar() {
           <Link to="#comparison" className="text-slate-300 hover:text-white transition-colors">
             Why Us
           </Link>
-          <WalletConnect />
+          {isConnected ? (
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-slate-300">
+                <div>{primaryWalletType}</div>
+                <div>ETH: {ethereumAddress?.slice(0, 6)}...{ethereumAddress?.slice(-4)}</div>
+                <div>APT: {aptosAddress?.slice(0, 6)}...{aptosAddress?.slice(-4)}</div>
+              </div>
+              <Button
+                onClick={disconnectWallet}
+                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+              >
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <Link to="/swap">
+              <Button className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                <Wallet className="w-4 h-4" />
+                Connect Wallet
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Mobile Menu Button */}
@@ -62,7 +84,28 @@ export default function Navbar() {
             >
               Why Us
             </Link>
-            <WalletConnect />
+            {isConnected ? (
+              <div className="flex items-center space-x-4">
+                <div className="text-sm text-slate-300">
+                  <div>{primaryWalletType}</div>
+                  <div>ETH: {ethereumAddress?.slice(0, 6)}...{ethereumAddress?.slice(-4)}</div>
+                  <div>APT: {aptosAddress?.slice(0, 6)}...{aptosAddress?.slice(-4)}</div>
+                </div>
+                <Button
+                  onClick={disconnectWallet}
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+                >
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <Link to="/swap">
+                <Button className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                  <Wallet className="w-4 h-4" />
+                  Connect Wallet
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       )}
