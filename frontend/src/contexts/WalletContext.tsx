@@ -1,319 +1,254 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react'
-import { AptosWalletAdapterProvider, useWallet as useAptosWallet } from '@aptos-labs/wallet-adapter-react'
-import { PetraWallet } from 'petra-plugin-wallet-adapter'
-import { PontemWallet } from '@pontem/wallet-adapter-plugin'
-import { MartianWallet } from '@martianwallet/aptos-wallet-adapter'
+import React, { createContext, useState, type ReactNode } from 'react'
 
-// Note: For testing, make sure your Aptos wallet (Petra, Pontem, etc.) is configured to use TESTNET
-// In your wallet settings, switch from "Mainnet" to "Testnet" to avoid real transactions
-
-interface WalletState {
-  // Ethereum
-  ethereumAccount: string | null
-  ethereumChainId: number | null
-  ethereumProvider: any | null
+interface CrossChainWalletState {
+  // Primary wallet (Ethereum-based)
+  primaryWallet: string | null
+  primaryWalletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian' | null
   
-  // Aptos
-  aptosAccount: string | null
-  aptosConnected: boolean
+  // Derived addresses
+  ethereumAddress: string | null
+  aptosAddress: string | null
   
-  // Connection states
+  // Connection state
+  isConnected: boolean
   isConnecting: boolean
   error: string | null
 }
 
-interface WalletContextType extends WalletState {
-  // Ethereum methods
-  connectEthereum: (connectorType: 'metamask' | 'walletconnect' | '1inch') => Promise<void>
-  disconnectEthereum: () => void
-  
-  // Aptos methods
-  connectAptos: () => Promise<void>
-  disconnectAptos: () => void
+interface CrossChainWalletContextType extends CrossChainWalletState {
+  // Single connection method
+  connectWallet: (walletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian') => Promise<void>
+  disconnectWallet: () => void
   
   // Utility methods
-  getConnectedWallets: () => string[]
-  isWalletConnected: (chain: 'ethereum' | 'aptos') => boolean
-  getAvailableWallets: () => { name: string; available: boolean }[]
+  getWalletInfo: () => { ethereumAddress: string | null; aptosAddress: string | null; walletType: string | null }
+  isWalletConnected: () => boolean
 }
 
-const WalletContext = createContext<WalletContextType | undefined>(undefined)
+export const CrossChainWalletContext = createContext<CrossChainWalletContextType | undefined>(undefined)
 
-// Configure Aptos wallets
-const aptosWallets = [
-  new PetraWallet(),
-  new PontemWallet(),
-  new MartianWallet()
-]
-
-// Combined Wallet Provider
-export function WalletProvider({ children }: { children: ReactNode }) {
-  const [ethereumAccount, setEthereumAccount] = useState<string | null>(null)
-  const [ethereumChainId, setEthereumChainId] = useState<number | null>(null)
-  const [ethereumProvider, setEthereumProvider] = useState<any | null>(null)
+// Cross-chain wallet provider
+export function CrossChainWalletProvider({ children }: { children: ReactNode }) {
+  const [primaryWallet, setPrimaryWallet] = useState<string | null>(null)
+  const [primaryWalletType, setPrimaryWalletType] = useState<'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian' | null>(null)
+  const [ethereumAddress, setEthereumAddress] = useState<string | null>(null)
+  const [aptosAddress, setAptosAddress] = useState<string | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  console.log('WalletProvider render:', {
-    ethereumAccount,
-    ethereumChainId,
-    isConnecting,
-    error
+  // Simple hash-based derivation (fallback method)
+  const deriveAptosAddress = (ethereumAddress: string): string => {
+    // Simple hash-based derivation for demo purposes
+    // In production, use the official Aptos derived wallet package
+    const hash = ethereumAddress.split('').reduce((acc, char) => {
+      return acc + char.charCodeAt(0)
+    }, 0).toString(16)
+    
+    return `0x${hash.padEnd(64, '0').slice(0, 64)}`
+  }
+
+  const connectWallet = async (walletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian') => {
+    console.log('Connecting to wallet:', walletType)
+    setIsConnecting(true)
+    setError(null)
+    
+    try {
+      let address = ''
+
+      // Connect to the selected wallet
+      switch (walletType) {
+        case 'metamask': {
+          if (typeof window.ethereum === 'undefined') {
+            throw new Error('MetaMask is not installed. Please install MetaMask to continue.')
+          }
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[]
+          address = accounts[0]
+          break
+        }
+
+        case '1inch': {
+          if (typeof window.ethereum !== 'undefined' && window.ethereum.is1inchWallet) {
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[]
+            address = accounts[0]
+          } else {
+            throw new Error('1inch Wallet is not installed. Please install 1inch Wallet to continue.')
+          }
+          break
+        }
+
+        case 'phantom': {
+          if (typeof window.phantom?.ethereum !== 'undefined') {
+            const accounts = await window.phantom.ethereum.request({ method: 'eth_requestAccounts' }) as string[]
+            address = accounts[0]
+          } else {
+            throw new Error('Phantom Wallet is not installed. Please install Phantom Wallet to continue.')
+          }
+          break
+        }
+
+        case 'coinbase': {
+          if (typeof window.ethereum !== 'undefined' && window.ethereum.providers) {
+            const coinbaseProvider = window.ethereum.providers.find((p: unknown) => (p as { isCoinbaseWallet?: boolean }).isCoinbaseWallet)
+            if (coinbaseProvider) {
+              const accounts = await (coinbaseProvider as { request: (args: { method: string; params?: string[] }) => Promise<string[]> }).request({ method: 'eth_requestAccounts' })
+              address = accounts[0]
+            } else {
+              throw new Error('Coinbase Wallet is not installed. Please install Coinbase Wallet to continue.')
+            }
+          } else {
+            throw new Error('Coinbase Wallet is not installed. Please install Coinbase Wallet to continue.')
+          }
+          break
+        }
+
+        case 'petra': {
+          // Check for Petra wallet
+          if (typeof window.aptos !== 'undefined') {
+            const accounts = await window.aptos.connect()
+            address = accounts.address
+          } else {
+            throw new Error('Petra Wallet is not installed. Please install Petra Wallet to continue.')
+          }
+          break
+        }
+
+        case 'pontem': {
+          // Check for Pontem wallet
+          if (typeof window.pontem !== 'undefined') {
+            const accounts = await window.pontem.connect()
+            address = accounts.address
+          } else {
+            throw new Error('Pontem Wallet is not installed. Please install Pontem Wallet to continue.')
+          }
+          break
+        }
+
+        case 'martian': {
+          // Check for Martian wallet
+          if (typeof window.martian !== 'undefined') {
+            const accounts = await window.martian.connect()
+            address = accounts.address
+          } else {
+            throw new Error('Martian Wallet is not installed. Please install Martian Wallet to continue.')
+          }
+          break
+        }
+
+        default:
+          throw new Error(`Wallet type ${walletType} is not yet supported.`)
+      }
+
+      if (!address) {
+        throw new Error('Failed to get wallet address')
+      }
+
+      // Derive Aptos address from Ethereum address
+      const derivedAptosAddress = deriveAptosAddress(address)
+
+      // Set state
+      setPrimaryWallet(address)
+      setPrimaryWalletType(walletType)
+      setEthereumAddress(address)
+      setAptosAddress(derivedAptosAddress)
+      setIsConnected(true)
+
+      console.log('Cross-chain wallet connected:', {
+        walletType,
+        ethereumAddress: address,
+        aptosAddress: derivedAptosAddress
+      })
+
+      // Listen for account changes
+      if (typeof window.ethereum !== 'undefined') {
+        window.ethereum.on('accountsChanged', (accounts: unknown) => {
+          const accountArray = accounts as string[]
+          if (accountArray.length > 0) {
+            const newAddress = accountArray[0]
+            const newAptosAddress = deriveAptosAddress(newAddress)
+            setPrimaryWallet(newAddress)
+            setEthereumAddress(newAddress)
+            setAptosAddress(newAptosAddress)
+          } else {
+            disconnectWallet()
+          }
+        })
+      }
+
+    } catch (error) {
+      console.error('Failed to connect wallet:', error)
+      setError(error instanceof Error ? error.message : 'Failed to connect wallet')
+    } finally {
+      setIsConnecting(false)
+    }
+  }
+
+  const disconnectWallet = () => {
+    setPrimaryWallet(null)
+    setPrimaryWalletType(null)
+    setEthereumAddress(null)
+    setAptosAddress(null)
+    setIsConnected(false)
+    setError(null)
+    console.log('Cross-chain wallet disconnected')
+  }
+
+  const getWalletInfo = () => ({
+    ethereumAddress,
+    aptosAddress,
+    walletType: primaryWalletType
   })
 
-  const connectEthereum = async (connectorType: 'metamask' | 'walletconnect' | '1inch') => {
-    console.log('connectEthereum called with:', connectorType)
-    setIsConnecting(true)
-    setError(null)
-    
-    try {
-      if (connectorType === 'metamask') {
-        // Check if MetaMask is installed
-        if (typeof window.ethereum === 'undefined') {
-          throw new Error('MetaMask is not installed. Please install MetaMask to continue.')
-        }
+  const isWalletConnected = () => isConnected
 
-        console.log('MetaMask detected, requesting accounts...')
-
-        // Request account access
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
-        const account = accounts[0]
-        
-        // Get chain ID
-        const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-        
-        console.log('MetaMask connected:', { account, chainId })
-        
-        setEthereumAccount(account)
-        setEthereumChainId(parseInt(chainId, 16))
-        setEthereumProvider(window.ethereum)
-        
-        // Listen for account changes
-        window.ethereum.on('accountsChanged', (accounts: string[]) => {
-          setEthereumAccount(accounts[0] || null)
-        })
-        
-        // Listen for chain changes
-        window.ethereum.on('chainChanged', (chainId: string) => {
-          setEthereumChainId(parseInt(chainId, 16))
-        })
-        
-      } else if (connectorType === '1inch') {
-        // Check if 1inch Wallet is installed
-        if (typeof window.ethereum === 'undefined') {
-          throw new Error('1inch Wallet is not installed. Please install 1inch Wallet to continue.')
-        }
-
-        // Check if it's 1inch Wallet (you can detect this by checking the provider name)
-        const provider = window.ethereum
-        const is1inchWallet = provider.is1inchWallet || 
-                             provider.providers?.some((p: any) => p.is1inchWallet) ||
-                             provider.constructor.name === 'OneInchWalletProvider'
-
-        if (!is1inchWallet) {
-          throw new Error('1inch Wallet is not installed. Please install 1inch Wallet to continue.')
-        }
-
-        // Request account access
-        const accounts = await provider.request({ method: 'eth_requestAccounts' })
-        const account = accounts[0]
-        
-        // Get chain ID
-        const chainId = await provider.request({ method: 'eth_chainId' })
-        
-        setEthereumAccount(account)
-        setEthereumChainId(parseInt(chainId, 16))
-        setEthereumProvider(provider)
-        
-        // Listen for account changes
-        provider.on('accountsChanged', (accounts: string[]) => {
-          setEthereumAccount(accounts[0] || null)
-        })
-        
-        // Listen for chain changes
-        provider.on('chainChanged', (chainId: string) => {
-          setEthereumChainId(parseInt(chainId, 16))
-        })
-        
-      } else if (connectorType === 'walletconnect') {
-        // Mock WalletConnect implementation
-        setEthereumAccount('0x1234567890abcdef...')
-        setEthereumChainId(1)
-        setEthereumProvider(null)
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect wallet'
-      console.error('Wallet connection error:', err)
-      setError(errorMessage)
-      throw err
-    } finally {
-      setIsConnecting(false)
-    }
-  }
-
-  const disconnectEthereum = () => {
-    setEthereumAccount(null)
-    setEthereumChainId(null)
-    setEthereumProvider(null)
-  }
-
-  const connectAptos = async () => {
-    setIsConnecting(true)
-    setError(null)
-    
-    try {
-      // The Aptos wallet adapter will automatically show wallet selection
-      // when the user clicks connect. We don't need to manually trigger it.
-      console.log('Aptos wallet connection requested - user will see wallet selection')
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to connect Aptos wallet'
-      setError(errorMessage)
-      throw err
-    } finally {
-      setIsConnecting(false)
-    }
-  }
-
-  const disconnectAptos = () => {
-    // This will be handled by the Aptos wallet adapter
-    console.log('Aptos disconnect requested')
-  }
-
-  const getConnectedWallets = () => {
-    const wallets = []
-    if (ethereumAccount) wallets.push('ethereum')
-    // Note: Aptos wallet state is managed by the adapter
-    return wallets
-  }
-
-  const isWalletConnected = (chain: 'ethereum' | 'aptos') => {
-    return chain === 'ethereum' ? !!ethereumAccount : false
-  }
-
-  const getAvailableWallets = () => {
-    const wallets = [
-      { name: 'MetaMask', available: typeof window.ethereum !== 'undefined' },
-      { name: '1inch Wallet', available: typeof window.ethereum !== 'undefined' && 
-        !!(window.ethereum.is1inchWallet || 
-         window.ethereum.providers?.some((p: any) => p.is1inchWallet)) },
-      { name: 'WalletConnect', available: true } // Always available as fallback
-    ]
-    return wallets
+  const value: CrossChainWalletContextType = {
+    primaryWallet,
+    primaryWalletType,
+    ethereumAddress,
+    aptosAddress,
+    isConnected,
+    isConnecting,
+    error,
+    connectWallet,
+    disconnectWallet,
+    getWalletInfo,
+    isWalletConnected
   }
 
   return (
-    <AptosWalletAdapterProvider
-      autoConnect={true}
-    >
-      <AptosWalletWrapper
-        ethereumAccount={ethereumAccount}
-        ethereumChainId={ethereumChainId}
-        ethereumProvider={ethereumProvider}
-        isConnecting={isConnecting}
-        error={error}
-        connectEthereum={connectEthereum}
-        disconnectEthereum={disconnectEthereum}
-        connectAptos={connectAptos}
-        disconnectAptos={disconnectAptos}
-        getConnectedWallets={getConnectedWallets}
-        isWalletConnected={isWalletConnected}
-        getAvailableWallets={getAvailableWallets}
-      >
-        {children}
-      </AptosWalletWrapper>
-    </AptosWalletAdapterProvider>
-  )
-}
-
-// Wrapper component to access Aptos wallet hooks
-function AptosWalletWrapper({ 
-  children, 
-  ethereumAccount,
-  ethereumChainId,
-  ethereumProvider,
-  isConnecting,
-  error,
-  connectEthereum,
-  disconnectEthereum,
-  connectAptos,
-  disconnectAptos,
-  getConnectedWallets,
-  isWalletConnected,
-  getAvailableWallets
-}: { 
-  children: ReactNode
-  ethereumAccount: string | null
-  ethereumChainId: number | null
-  ethereumProvider: any | null
-  isConnecting: boolean
-  error: string | null
-  connectEthereum: (connectorType: 'metamask' | 'walletconnect' | '1inch') => Promise<void>
-  disconnectEthereum: () => void
-  connectAptos: () => Promise<void>
-  disconnectAptos: () => void
-  getConnectedWallets: () => string[]
-  isWalletConnected: (chain: 'ethereum' | 'aptos') => boolean
-  getAvailableWallets: () => { name: string; available: boolean }[]
-}) {
-  const { account, connected, disconnect } = useAptosWallet()
-  
-  console.log('AptosWalletWrapper state:', { account, connected })
-  
-  // Combine Ethereum and Aptos states
-  const combinedGetConnectedWallets = () => {
-    const wallets = []
-    if (ethereumAccount) wallets.push('ethereum')
-    if (connected) wallets.push('aptos')
-    return wallets
-  }
-
-  const combinedIsWalletConnected = (chain: 'ethereum' | 'aptos') => {
-    return chain === 'ethereum' ? !!ethereumAccount : connected
-  }
-
-  const combinedDisconnectAptos = () => {
-    disconnect()
-  }
-
-  return (
-    <WalletContext.Provider value={{
-      ethereumAccount,
-      ethereumChainId,
-      ethereumProvider,
-      aptosAccount: account?.address?.toString() || null,
-      aptosConnected: connected,
-      isConnecting,
-      error,
-      connectEthereum,
-      disconnectEthereum,
-      connectAptos,
-      disconnectAptos: combinedDisconnectAptos,
-      getConnectedWallets: combinedGetConnectedWallets,
-      isWalletConnected: combinedIsWalletConnected,
-      getAvailableWallets,
-    }}>
+    <CrossChainWalletContext.Provider value={value}>
       {children}
-    </WalletContext.Provider>
+    </CrossChainWalletContext.Provider>
   )
 }
 
-export function useWallet() {
-  const context = useContext(WalletContext)
-  if (context === undefined) {
-    throw new Error('useWallet must be used within a WalletProvider')
-  }
-  return context
-}
 
-// Add window.ethereum type
+
+// Type declarations for wallet providers
 declare global {
   interface Window {
     ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>
-      on: (event: string, callback: (...args: any[]) => void) => void
-      removeListener: (event: string, callback: (...args: any[]) => void) => void
+      request: (args: { method: string; params?: string[] }) => Promise<unknown>
+      on: (event: string, callback: (...args: unknown[]) => void) => void
+      removeListener: (event: string, callback: (...args: unknown[]) => void) => void
       is1inchWallet?: boolean
-      providers?: any[]
+      providers?: unknown[]
+    }
+    phantom?: {
+      ethereum?: {
+        request: (args: { method: string; params?: string[] }) => Promise<unknown>
+        on: (event: string, callback: (...args: unknown[]) => void) => void
+        removeListener: (event: string, callback: (...args: unknown[]) => void) => void
+      }
+    }
+    aptos?: {
+      connect: () => Promise<{ address: string }>
+    }
+    pontem?: {
+      connect: () => Promise<{ address: string }>
+    }
+    martian?: {
+      connect: () => Promise<{ address: string }>
     }
   }
 } 

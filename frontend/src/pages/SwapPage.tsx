@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { ArrowLeftRight, Wallet, Shield, Zap, CheckCircle, AlertCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useWallet } from '@/contexts/WalletContext'
-import WalletConnect from '@/components/WalletConnect'
-import WalletTest from '@/components/WalletTest'
+import { useCrossChainWallet } from '@/hooks/useCrossChainWallet'
 
 const API_BASE_URL = 'http://localhost:3001/api'
 
@@ -30,8 +28,10 @@ interface Quote {
   }
 }
 
+
+
 export default function SwapPage() {
-  const { ethereumAccount, aptosAccount, isWalletConnected } = useWallet()
+  const { ethereumAddress, aptosAddress, isConnected, connectWallet, disconnectWallet, primaryWalletType, isConnecting, error } = useCrossChainWallet()
   const [fromToken, setFromToken] = useState('ETH')
   const [toToken, setToToken] = useState('APT')
   const [fromAmount, setFromAmount] = useState('')
@@ -40,8 +40,27 @@ export default function SwapPage() {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [tokens, setTokens] = useState<Token[]>([])
   const [loading, setLoading] = useState(false)
+  const [showWalletSelector, setShowWalletSelector] = useState(false)
 
-  const isConnected = isWalletConnected('ethereum') || isWalletConnected('aptos')
+  // Get the active wallet address for API calls
+  const getActiveWalletAddress = () => {
+    return ethereumAddress || aptosAddress
+  }
+
+  // Handle wallet connection
+  const handleWalletConnect = async (walletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian') => {
+    try {
+      await connectWallet(walletType)
+      setShowWalletSelector(false)
+    } catch (error) {
+      console.error('Failed to connect wallet:', error)
+    }
+  }
+
+  // Toggle wallet selector
+  const toggleWalletSelector = () => {
+    setShowWalletSelector(!showWalletSelector)
+  }
 
   // Fetch available tokens on component mount
   useEffect(() => {
@@ -112,7 +131,7 @@ export default function SwapPage() {
         },
         body: JSON.stringify({
           quoteId: quote.id,
-          userAddress: ethereumAccount || aptosAccount,
+          userAddress: getActiveWalletAddress(),
           fromChain: 'ethereum',
           toChain: 'aptos',
         }),
@@ -135,36 +154,7 @@ export default function SwapPage() {
     }
   }
 
-  const pollTransactionStatus = async (transactionId: string) => {
-    const maxAttempts = 30
-    let attempts = 0
 
-    const poll = async () => {
-      if (attempts >= maxAttempts) return
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/bridge/status/${transactionId}`)
-        const data = await response.json()
-
-        if (data.status === 'completed') {
-          setSwapStatus('success')
-          return
-        } else if (data.status === 'failed') {
-          setSwapStatus('error')
-          return
-        }
-
-        attempts++
-        setTimeout(poll, 2000) // Poll every 2 seconds
-      } catch (error) {
-        console.error('Failed to poll transaction status:', error)
-        attempts++
-        setTimeout(poll, 2000)
-      }
-    }
-
-    poll()
-  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -175,12 +165,125 @@ export default function SwapPage() {
             <Link to="/" className="text-xl font-bold text-white">
               1inch Aptos Bridge
             </Link>
-            <WalletConnect />
+            <div className="flex items-center space-x-4">
+              {/* Cross-chain wallet connection */}
+              {!isConnected ? (
+                <Button
+                  onClick={toggleWalletSelector}
+                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Connect Cross-Chain Wallet
+                </Button>
+              ) : (
+                <div className="flex items-center space-x-4">
+                  <div className="text-sm text-slate-300">
+                    <div>Connected: {primaryWalletType}</div>
+                    <div>ETH: {ethereumAddress?.slice(0, 6)}...{ethereumAddress?.slice(-4)}</div>
+                    <div>APT: {aptosAddress?.slice(0, 6)}...{aptosAddress?.slice(-4)}</div>
+                  </div>
+                  <Button
+                    onClick={disconnectWallet}
+                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Disconnect
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Wallet selector interface */}
+        {showWalletSelector && (
+          <div className="mb-8 bg-slate-900 rounded-xl border border-slate-800 p-6">
+            <h2 className="text-2xl font-bold mb-6">Connect Cross-Chain Wallet</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Ethereum Wallets */}
+              <Button
+                onClick={() => handleWalletConnect('metamask')}
+                disabled={isConnecting}
+                className="bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+              >
+                <div className="text-lg font-semibold">MetaMask</div>
+                <div className="text-sm opacity-80">Ethereum</div>
+              </Button>
+              
+              <Button
+                onClick={() => handleWalletConnect('1inch')}
+                disabled={isConnecting}
+                className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+              >
+                <div className="text-lg font-semibold">1inch</div>
+                <div className="text-sm opacity-80">DeFi Wallet</div>
+              </Button>
+              
+              <Button
+                onClick={() => handleWalletConnect('phantom')}
+                disabled={isConnecting}
+                className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+              >
+                <div className="text-lg font-semibold">Phantom</div>
+                <div className="text-sm opacity-80">Multi-Chain</div>
+              </Button>
+              
+              <Button
+                onClick={() => handleWalletConnect('coinbase')}
+                disabled={isConnecting}
+                className="bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+              >
+                <div className="text-lg font-semibold">Coinbase</div>
+                <div className="text-sm opacity-80">Exchange</div>
+              </Button>
+              
+              {/* Aptos Wallets */}
+              <Button
+                onClick={() => handleWalletConnect('petra')}
+                disabled={isConnecting}
+                className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+              >
+                <div className="text-lg font-semibold">Petra</div>
+                <div className="text-sm opacity-80">Aptos</div>
+              </Button>
+              
+              <Button
+                onClick={() => handleWalletConnect('pontem')}
+                disabled={isConnecting}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+              >
+                <div className="text-lg font-semibold">Pontem</div>
+                <div className="text-sm opacity-80">Aptos</div>
+              </Button>
+              
+              <Button
+                onClick={() => handleWalletConnect('martian')}
+                disabled={isConnecting}
+                className="bg-red-600 hover:bg-red-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+              >
+                <div className="text-lg font-semibold">Martian</div>
+                <div className="text-sm opacity-80">Aptos</div>
+              </Button>
+            </div>
+            
+            {error && (
+              <div className="mt-4 p-3 bg-red-900 border border-red-700 rounded-lg text-red-200">
+                {error}
+              </div>
+            )}
+            
+            <div className="mt-6 text-center">
+              <Button
+                onClick={() => setShowWalletSelector(false)}
+                className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Swap Interface */}
           <div className="space-y-6">
@@ -372,10 +475,7 @@ export default function SwapPage() {
           </div>
         </div>
 
-        {/* Wallet Test Component */}
-        <div className="mt-8">
-          <WalletTest />
-        </div>
+
       </div>
     </div>
   )
