@@ -81,6 +81,8 @@ export default function SwapPage() {
           fromToken,
           toToken,
           fromAmount,
+          fromChain: 'ethereum',
+          toChain: 'aptos',
         }),
       })
 
@@ -88,6 +90,8 @@ export default function SwapPage() {
       if (data.success) {
         setQuote(data.quote)
         setToAmount(data.quote.toAmount)
+      } else {
+        console.error('Quote error:', data.error)
       }
     } catch (error) {
       console.error('Failed to fetch quote:', error)
@@ -108,20 +112,22 @@ export default function SwapPage() {
         },
         body: JSON.stringify({
           quoteId: quote.id,
-          fromToken,
-          toToken,
-          fromAmount,
-          toAmount,
+          userAddress: ethereumAccount || aptosAccount,
+          fromChain: 'ethereum',
+          toChain: 'aptos',
         }),
       })
 
       const data = await response.json()
       if (data.success) {
+        // Show implementation status
         setSwapStatus('success')
-        // Poll for transaction status
-        pollTransactionStatus(data.transactionId)
+        console.log('Swap execution response:', data.execution)
+        // Note: Polling disabled since implementation is pending
+        // pollTransactionStatus(data.execution.transactionId)
       } else {
         setSwapStatus('error')
+        console.error('Execution error:', data.error)
       }
     } catch (error) {
       console.error('Failed to execute swap:', error)
