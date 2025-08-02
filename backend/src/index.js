@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 require('dotenv').config();
 
 // Import services
@@ -8,6 +9,7 @@ const OneInchService = require('./services/oneInchService');
 const TokenService = require('./services/tokenService');
 const FusionService = require('./services/fusionService');
 const ContractService = require('./services/contractService');
+const AptosService = require('./services/aptosService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,16 +19,19 @@ const oneInchService = new OneInchService();
 const tokenService = new TokenService();
 const fusionService = new FusionService();
 const contractService = new ContractService();
+const aptosService = new AptosService();
 
 // Middleware
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
-    const networkInfo = await contractService.getNetworkInfo();
+    const ethereumNetworkInfo = await contractService.getNetworkInfo();
+    const aptosNetworkInfo = await aptosService.getNetworkInfo();
     
     res.json({ 
       status: 'ok', 
@@ -34,12 +39,15 @@ app.get('/health', async (req, res) => {
       version: '1.0.0',
       services: {
         ethereum: contractService.isConfigured() ? 'configured' : 'pending_configuration',
-        aptos: 'connected',
+        aptos: aptosService.isConfigured() ? 'configured' : 'pending_configuration',
         fusion: fusionService.isConfigured() ? 'configured' : 'pending_configuration',
         oneinch: oneInchService.isConfigured() ? 'configured' : 'pending_configuration',
         contracts: contractService.isConfigured() ? 'configured' : 'pending_configuration'
       },
-      network: networkInfo
+      networks: {
+        ethereum: ethereumNetworkInfo,
+        aptos: aptosNetworkInfo
+      }
     });
   } catch (error) {
     res.json({
@@ -48,7 +56,7 @@ app.get('/health', async (req, res) => {
       version: '1.0.0',
       services: {
         ethereum: 'error',
-        aptos: 'connected',
+        aptos: aptosService.isConfigured() ? 'configured' : 'pending_configuration',
         fusion: fusionService.isConfigured() ? 'configured' : 'pending_configuration',
         oneinch: oneInchService.isConfigured() ? 'configured' : 'pending_configuration',
         contracts: contractService.isConfigured() ? 'configured' : 'pending_configuration'
@@ -85,6 +93,16 @@ app.get('/api/test/contracts', async (req, res) => {
   }
 });
 
+// Test Aptos service
+app.get('/api/test/aptos', async (req, res) => {
+  try {
+    const testResult = await aptosService.testConnection();
+    res.json(testResult);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Switch network endpoint
 app.post('/api/switch-network', async (req, res) => {
   try {
@@ -105,15 +123,17 @@ app.post('/api/switch-network', async (req, res) => {
       });
     }
 
-    // Switch networks in both services
+    // Switch networks in all services
     const contractResult = await contractService.switchNetwork(network);
     const fusionResult = await fusionService.switchNetwork(network);
+    const aptosResult = await aptosService.switchNetwork(network);
 
     res.json({
       success: true,
       message: `Switched to ${network}`,
       contractService: contractResult,
       fusionService: fusionResult,
+      aptosService: aptosResult,
       currentNetwork: network
     });
   } catch (error) {
@@ -477,6 +497,7 @@ app.use('*', (req, res) => {
       'GET /health',
       'GET /api/test/fusion',
       'GET /api/test/contracts',
+      'GET /api/test/aptos',
       'POST /api/switch-network',
       'POST /api/bridge/quote',
       'POST /api/bridge/execute', 
