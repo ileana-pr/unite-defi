@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftRight, Wallet, Shield, Zap, CheckCircle, AlertCircle, Info, Search } from 'lucide-react'
+import { ArrowLeftRight, Wallet, Shield, Zap, CheckCircle, AlertCircle, Info, Search, AlertTriangle, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useCrossChainWallet } from '@/hooks/useCrossChainWallet'
 
@@ -31,7 +31,7 @@ interface Quote {
 
 
 export default function SwapPage() {
-  const { ethereumAddress, aptosAddress, isConnected, connectWallet, disconnectWallet, primaryWalletType, isConnecting, error } = useCrossChainWallet()
+  const { ethereumWallet, aptosWallet, isConnected, connectWallet, disconnectWallet, ethereumWalletType, aptosWalletType, isConnecting, error } = useCrossChainWallet()
   const [fromToken, setFromToken] = useState('ETH')
   const [toToken, setToToken] = useState('APT')
   const [fromAmount, setFromAmount] = useState('')
@@ -41,10 +41,14 @@ export default function SwapPage() {
   const [tokens, setTokens] = useState<Token[]>([])
   const [loading, setLoading] = useState(false)
   const [showWalletSelector, setShowWalletSelector] = useState(false)
+  const [transactionHashes, setTransactionHashes] = useState<{
+    ethereum?: string;
+    aptos?: string;
+  }>({})
 
   // Get the active wallet address for API calls
   const getActiveWalletAddress = () => {
-    return ethereumAddress || aptosAddress
+    return ethereumWallet || aptosWallet
   }
 
   // Handle wallet connection
@@ -152,6 +156,9 @@ export default function SwapPage() {
           userAddress: getActiveWalletAddress(),
           fromChain: fromTokenInfo.chain,
           toChain: toTokenInfo.chain,
+          fromToken: fromTokenInfo.symbol,
+          toToken: toTokenInfo.symbol,
+          fromAmount: fromAmount,
         }),
       })
 
@@ -160,6 +167,16 @@ export default function SwapPage() {
         // Show implementation status
         setSwapStatus('success')
         console.log('Swap execution response:', data.execution)
+        
+        // Store transaction hashes for display
+        if (data.execution) {
+          console.log('🔍 Frontend execution data:', data.execution);
+          setTransactionHashes({
+            ethereum: data.execution.ethereumTxHash,
+            aptos: data.execution.aptosTxHash
+          })
+        }
+        
         // Note: Polling disabled since implementation is pending
         // pollTransactionStatus(data.execution.transactionId)
       } else {
@@ -196,16 +213,24 @@ export default function SwapPage() {
               ) : (
                 <div className="flex items-center space-x-4">
                   <div className="text-sm text-slate-300">
-                    <div>Connected: {primaryWalletType}</div>
-                    <div>ETH: {ethereumAddress?.slice(0, 6)}...{ethereumAddress?.slice(-4)}</div>
-                    <div>APT: {aptosAddress?.slice(0, 6)}...{aptosAddress?.slice(-4)}</div>
+                    <div>Connected: {ethereumWalletType || aptosWalletType}</div>
+                    <div>ETH: {ethereumWallet ? `${ethereumWallet.slice(0, 6)}...${ethereumWallet.slice(-4)}` : 'Not connected'}</div>
+                    <div>APT: {aptosWallet ? `${aptosWallet.slice(0, 6)}...${aptosWallet.slice(-4)}` : '⚠️ Connect Petra Wallet'}</div>
                   </div>
-                  <Button
-                    onClick={disconnectWallet}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-                  >
-                    Disconnect
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button
+                      onClick={toggleWalletSelector}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Add Wallet
+                    </Button>
+                    <Button
+                      onClick={disconnectWallet}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Disconnect All
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -218,14 +243,25 @@ export default function SwapPage() {
         {showWalletSelector && (
           <div className="mb-8 bg-slate-900 rounded-xl border border-slate-800 p-6">
             <h2 className="text-2xl font-bold mb-6">Connect Cross-Chain Wallet</h2>
+            <div className="mb-4 text-sm text-slate-400">
+              {ethereumWallet && <div>✅ Ethereum: {ethereumWalletType} connected</div>}
+              {aptosWallet && <div>✅ Aptos: {aptosWalletType} connected</div>}
+              {!ethereumWallet && !aptosWallet && <div>No wallets connected</div>}
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {/* Ethereum Wallets */}
               <Button
                 onClick={() => handleWalletConnect('metamask')}
-                disabled={isConnecting}
-                className="bg-orange-600 hover:bg-orange-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+                disabled={isConnecting || ethereumWalletType === 'metamask'}
+                className={`p-4 rounded-lg flex flex-col items-center space-y-2 ${
+                  ethereumWalletType === 'metamask' 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-orange-600 hover:bg-orange-700 text-white'
+                }`}
               >
-                <div className="text-lg font-semibold">MetaMask</div>
+                <div className="text-lg font-semibold">
+                  {ethereumWalletType === 'metamask' ? '✅ MetaMask' : 'MetaMask'}
+                </div>
                 <div className="text-sm opacity-80">Ethereum</div>
               </Button>
               
@@ -259,10 +295,16 @@ export default function SwapPage() {
               {/* Aptos Wallets */}
               <Button
                 onClick={() => handleWalletConnect('petra')}
-                disabled={isConnecting}
-                className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg flex flex-col items-center space-y-2"
+                disabled={isConnecting || aptosWalletType === 'petra'}
+                className={`p-4 rounded-lg flex flex-col items-center space-y-2 ${
+                  aptosWalletType === 'petra' 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
               >
-                <div className="text-lg font-semibold">Petra</div>
+                <div className="text-lg font-semibold">
+                  {aptosWalletType === 'petra' ? '✅ Petra' : 'Petra'}
+                </div>
                 <div className="text-sm opacity-80">Aptos</div>
               </Button>
               
@@ -478,12 +520,62 @@ export default function SwapPage() {
               </div>
             )}
 
+            {/* Aptos Wallet Warning */}
+            {isConnected && !aptosWallet && (
+              <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-4">
+                <div className="flex items-center">
+                  <AlertTriangle className="w-5 h-5 text-yellow-400 mr-2" />
+                  <span className="text-yellow-400">
+                    <strong>Important:</strong> Connect your Petra wallet to receive APT tokens. 
+                    Click "Connect Cross-Chain Wallet" and select Petra.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Status Messages */}
             {swapStatus === 'success' && (
               <div className="bg-green-500/20 border border-green-500 rounded-lg p-4">
-                <div className="flex items-center">
-                  <CheckCircle className="w-5 h-5 text-green-400 mr-2" />
-                  <span className="text-green-400">Bridge transaction completed successfully!</span>
+                <div className="flex items-start">
+                  <CheckCircle className="w-5 h-5 text-green-400 mr-2 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-green-400 font-medium mb-2">
+                      Bridge transaction completed successfully!
+                    </div>
+                    
+                    {/* Transaction Links */}
+                    <div className="space-y-2 text-sm">
+                      {transactionHashes.ethereum && (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-slate-300">Ethereum:</span>
+                          <a 
+                            href={`https://sepolia.etherscan.io/tx/${transactionHashes.ethereum}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300 underline flex items-center space-x-1"
+                          >
+                            <span>{transactionHashes.ethereum.slice(0, 10)}...{transactionHashes.ethereum.slice(-8)}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      )}
+                      
+                      {transactionHashes.aptos && (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-slate-300">Aptos:</span>
+                          <a 
+                            href={`https://explorer.aptoslabs.com/txn/${transactionHashes.aptos}?network=testnet`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 hover:text-cyan-300 underline flex items-center space-x-1"
+                          >
+                            <span>{transactionHashes.aptos.slice(0, 10)}...{transactionHashes.aptos.slice(-8)}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

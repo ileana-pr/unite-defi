@@ -1,5 +1,5 @@
 const { AptosClient, AptosAccount, TxnBuilderTypes, BCS } = require('aptos');
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 
 class AptosService {
   constructor() {
@@ -112,14 +112,13 @@ class AptosService {
 
       // Create transaction payload for initiate_swap function
       const payload = {
-        function: `${this.contractAddresses.fusionBridge}::fusion_bridge::initiate_swap`,
+        function: `${this.contractAddresses.fusionBridge}::bridge::initiate_swap`,
         type_arguments: [],
         arguments: [
           recipient,
-          amount.toString(),
+          Math.floor(parseFloat(amount) * 100000000).toString(), // Convert to octas (8 decimal places)
           hashlock,
-          timelock.toString(),
-          targetChain
+          timelock.toString()
         ]
       };
 

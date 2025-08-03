@@ -64,7 +64,7 @@ class TokenService {
     this.testnetTokens = {
       ethereum: {
         ETH: {
-          address: '0x0000000000000000000000000000000000000000', // Native ETH
+          address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeEeE', // Native ETH
           symbol: 'ETH',
           name: 'Ethereum',
           decimals: 18,

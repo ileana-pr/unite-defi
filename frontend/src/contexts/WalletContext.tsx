@@ -1,13 +1,11 @@
 import { createContext, useState, type ReactNode } from 'react'
 
 interface CrossChainWalletState {
-  // Primary wallet (Ethereum-based)
-  primaryWallet: string | null
-  primaryWalletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian' | null
-  
-  // Derived addresses
-  ethereumAddress: string | null
-  aptosAddress: string | null
+  // Wallet connections
+  ethereumWallet: string | null
+  ethereumWalletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | null
+  aptosWallet: string | null
+  aptosWalletType: 'petra' | 'pontem' | 'martian' | null
   
   // Connection state
   isConnected: boolean
@@ -16,12 +14,12 @@ interface CrossChainWalletState {
 }
 
 interface CrossChainWalletContextType extends CrossChainWalletState {
-  // Single connection method
+  // Connection methods
   connectWallet: (walletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian') => Promise<void>
   disconnectWallet: () => void
   
   // Utility methods
-  getWalletInfo: () => { ethereumAddress: string | null; aptosAddress: string | null; walletType: string | null }
+  getWalletInfo: () => { ethereumWallet: string | null; aptosWallet: string | null; ethereumWalletType: string | null; aptosWalletType: string | null }
   isWalletConnected: () => boolean
 }
 
@@ -29,23 +27,20 @@ export const CrossChainWalletContext = createContext<CrossChainWalletContextType
 
 // Cross-chain wallet provider
 export function CrossChainWalletProvider({ children }: { children: ReactNode }) {
-  const [primaryWallet, setPrimaryWallet] = useState<string | null>(null)
-  const [primaryWalletType, setPrimaryWalletType] = useState<'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian' | null>(null)
-  const [ethereumAddress, setEthereumAddress] = useState<string | null>(null)
-  const [aptosAddress, setAptosAddress] = useState<string | null>(null)
+  const [ethereumWallet, setEthereumWallet] = useState<string | null>(null)
+  const [ethereumWalletType, setEthereumWalletType] = useState<'metamask' | '1inch' | 'phantom' | 'coinbase' | null>(null)
+  const [aptosWallet, setAptosWallet] = useState<string | null>(null)
+  const [aptosWalletType, setAptosWalletType] = useState<'petra' | 'pontem' | 'martian' | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Simple hash-based derivation (fallback method)
-  const deriveAptosAddress = (ethereumAddress: string): string => {
-    // Simple hash-based derivation for demo purposes
-    // In production, use the official Aptos derived wallet package
-    const hash = ethereumAddress.split('').reduce((acc, char) => {
-      return acc + char.charCodeAt(0)
-    }, 0).toString(16)
-    
-    return `0x${hash.padEnd(64, '0').slice(0, 64)}`
+  // For cross-chain bridges, we need both Ethereum and Aptos wallets
+  // This is a simplified implementation - in production, you'd want proper wallet management
+  const deriveAptosAddress = (_ethereumAddress: string): string => {
+    // For now, we'll use a placeholder that indicates the user needs to connect their Petra wallet
+    // In a real implementation, you'd prompt the user to connect their Aptos wallet separately
+    return '0x0000000000000000000000000000000000000000000000000000000000000000'
   }
 
   const connectWallet = async (walletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian') => {
@@ -59,8 +54,8 @@ export function CrossChainWalletProvider({ children }: { children: ReactNode }) 
       // Connect to the selected wallet
       switch (walletType) {
         case 'metamask': {
-          if (typeof window.ethereum === 'undefined') {
-            throw new Error('MetaMask is not installed. Please install MetaMask to continue.')
+        if (typeof window.ethereum === 'undefined') {
+          throw new Error('MetaMask is not installed. Please install MetaMask to continue.')
           }
           const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as string[]
           address = accounts[0]
@@ -143,32 +138,36 @@ export function CrossChainWalletProvider({ children }: { children: ReactNode }) 
         throw new Error('Failed to get wallet address')
       }
 
-      // Derive Aptos address from Ethereum address
-      const derivedAptosAddress = deriveAptosAddress(address)
+      // Set state based on wallet type
+      if (walletType === 'metamask' || walletType === '1inch' || walletType === 'phantom' || walletType === 'coinbase') {
+        // Ethereum wallet
+        setEthereumWallet(address)
+        setEthereumWalletType(walletType)
+        setIsConnected(true)
+        
+        console.log('Ethereum wallet connected:', {
+          walletType,
+          ethereumAddress: address
+        })
+      } else {
+        // Aptos wallet
+        setAptosWallet(address)
+        setAptosWalletType(walletType)
+        setIsConnected(true)
+        
+        console.log('Aptos wallet connected:', {
+          walletType,
+          aptosAddress: address
+        })
+      }
 
-      // Set state
-      setPrimaryWallet(address)
-      setPrimaryWalletType(walletType)
-      setEthereumAddress(address)
-      setAptosAddress(derivedAptosAddress)
-      setIsConnected(true)
-
-      console.log('Cross-chain wallet connected:', {
-        walletType,
-        ethereumAddress: address,
-        aptosAddress: derivedAptosAddress
-      })
-
-      // Listen for account changes
-      if (typeof window.ethereum !== 'undefined') {
+      // Listen for account changes (only for Ethereum wallets)
+      if (typeof window.ethereum !== 'undefined' && (walletType === 'metamask' || walletType === '1inch' || walletType === 'phantom' || walletType === 'coinbase')) {
         window.ethereum.on('accountsChanged', (accounts: unknown) => {
           const accountArray = accounts as string[]
           if (accountArray.length > 0) {
             const newAddress = accountArray[0]
-            const newAptosAddress = deriveAptosAddress(newAddress)
-            setPrimaryWallet(newAddress)
-            setEthereumAddress(newAddress)
-            setAptosAddress(newAptosAddress)
+            setEthereumWallet(newAddress)
           } else {
             disconnectWallet()
           }
@@ -184,28 +183,29 @@ export function CrossChainWalletProvider({ children }: { children: ReactNode }) 
   }
 
   const disconnectWallet = () => {
-    setPrimaryWallet(null)
-    setPrimaryWalletType(null)
-    setEthereumAddress(null)
-    setAptosAddress(null)
+    setEthereumWallet(null)
+    setEthereumWalletType(null)
+    setAptosWallet(null)
+    setAptosWalletType(null)
     setIsConnected(false)
     setError(null)
     console.log('Cross-chain wallet disconnected')
   }
 
   const getWalletInfo = () => ({
-    ethereumAddress,
-    aptosAddress,
-    walletType: primaryWalletType
+    ethereumWallet,
+    aptosWallet,
+    ethereumWalletType,
+    aptosWalletType
   })
 
   const isWalletConnected = () => isConnected
 
   const value: CrossChainWalletContextType = {
-    primaryWallet,
-    primaryWalletType,
-    ethereumAddress,
-    aptosAddress,
+    ethereumWallet,
+    ethereumWalletType,
+    aptosWallet,
+    aptosWalletType,
     isConnected,
     isConnecting,
     error,

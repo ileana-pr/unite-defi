@@ -2,7 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
-require('dotenv').config();
+const { ethers } = require('ethers');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 // Import services
 const OneInchService = require('./services/oneInchService');
@@ -19,16 +20,8 @@ const oneInchService = new OneInchService();
 const tokenService = new TokenService();
 const fusionService = new FusionService();
 const contractService = new ContractService();
-// Temporarily disable Aptos service due to private key format issue
-// const aptosService = new AptosService();
-const aptosService = {
-  isConfigured: () => false,
-  getNetworkInfo: () => ({ error: 'Aptos service temporarily disabled' }),
-  testConnection: () => ({ success: false, error: 'Aptos service temporarily disabled' }),
-  getWalletAddress: () => null,
-  getChainId: () => 2,
-  getNetworkName: () => 'Aptos Testnet'
-};
+// Initialize Aptos service
+const aptosService = new AptosService();
 
 // Middleware
 app.use(helmet());
@@ -342,13 +335,13 @@ app.get('/api/fusion/order/:orderHash', async (req, res) => {
 
 app.post('/api/bridge/execute', async (req, res) => {
   try {
-    const { quoteId, userAddress, fromChain, toChain } = req.body;
+    const { quoteId, userAddress, fromChain, toChain, fromToken, toToken, fromAmount } = req.body;
     
     // Validate required fields
-    if (!quoteId || !userAddress || !fromChain || !toChain) {
+    if (!quoteId || !userAddress || !fromChain || !toChain || !fromToken || !toToken || !fromAmount) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Missing required fields: quoteId, userAddress, fromChain, toChain' 
+        error: 'Missing required fields: quoteId, userAddress, fromChain, toChain, fromToken, toToken, fromAmount' 
       });
     }
 
@@ -376,38 +369,69 @@ app.post('/api/bridge/execute', async (req, res) => {
       let ethereumTxHash = null;
       let aptosTxHash = null;
       
-      // Step 1: Execute on source chain (Ethereum)
+      // Use the provided token information
+      const quoteDetails = {
+        fromToken,
+        toToken,
+        fromAmount
+      };
+      
+      // Step 1: Execute on source chain (Ethereum) using 1inch Fusion+
       if (fromChain === 'ethereum') {
-        console.log(`🔗 Executing Ethereum swap: ${fromToken} → ${toToken}`);
+        console.log(`🔗 Executing Ethereum swap: ${quoteDetails.fromToken} → ${quoteDetails.toToken}`);
         
         if (!contractService.isConfigured()) {
           throw new Error('Ethereum contract service not configured');
         }
         
         // Get token info
-        const fromTokenInfo = tokenService.getToken(fromToken, fromChain);
-        const toTokenInfo = tokenService.getToken(toToken, toChain);
+        const fromTokenInfo = tokenService.getToken(quoteDetails.fromToken, fromChain);
+        const toTokenInfo = tokenService.getToken(quoteDetails.toToken, toChain);
         
-        // Execute the swap on Ethereum
-        const ethereumResult = await contractService.executeSwap({
-          fromToken: fromTokenInfo.address,
-          toToken: toTokenInfo.address,
-          amount: tokenService.toWei(quote.fromAmount, fromTokenInfo.decimals),
-          recipient: userAddress,
-          hashlock,
-          timelock,
-          targetChain: toChain
-        });
-        
-        if (ethereumResult.success) {
-          ethereumTxHash = ethereumResult.transactionHash;
-          console.log(`✅ Ethereum swap executed: ${ethereumTxHash}`);
+        // Use 1inch Fusion+ for real cross-chain swap
+        if (fusionService.isConfigured()) {
+          console.log('🚀 Using 1inch Fusion+ for cross-chain execution...');
+          
+          // Create Fusion+ order for cross-chain swap
+          const fusionOrder = await fusionService.createCrossChainFusionOrder({
+            fromToken: fromTokenInfo.address,
+            toToken: toTokenInfo.address,
+            fromChain,
+            toChain,
+            amount: tokenService.toWei(quoteDetails.fromAmount, fromTokenInfo.decimals),
+            fromAddress: userAddress,
+            toAddress: userAddress,
+            slippage: 1
+          });
+          
+          if (fusionOrder.success) {
+            console.log('✅ Fusion+ cross-chain order created:', fusionOrder.data.orderId);
+            ethereumTxHash = fusionOrder.data.sourceOrder.quote.tx?.hash || 'pending';
+          } else {
+            throw new Error(`Fusion+ order failed: ${fusionOrder.error}`);
+          }
         } else {
-          throw new Error(`Ethereum swap failed: ${ethereumResult.error}`);
+          // Fallback to direct contract execution
+          const ethereumResult = await contractService.executeSwap({
+            fromToken: fromTokenInfo.address,
+            toToken: toTokenInfo.address,
+            amount: tokenService.toWei(quoteDetails.fromAmount, fromTokenInfo.decimals),
+            recipient: userAddress,
+            hashlock,
+            timelock,
+            targetChain: toChain
+          });
+          
+          if (ethereumResult.success) {
+            ethereumTxHash = ethereumResult.transactionHash;
+            console.log(`✅ Ethereum swap executed: ${ethereumTxHash}`);
+          } else {
+            throw new Error(`Ethereum swap failed: ${ethereumResult.error}`);
+          }
         }
       }
       
-      // Step 2: Execute on destination chain (Aptos)
+      // Step 2: Execute on destination chain (Aptos) after Ethereum verification
       if (toChain === 'aptos') {
         console.log(`🔗 Executing Aptos swap: ${fromToken} → ${toToken}`);
         
@@ -415,17 +439,28 @@ app.post('/api/bridge/execute', async (req, res) => {
           throw new Error('Aptos service not configured');
         }
         
+        // In a production bridge, we would:
+        // 1. Wait for Ethereum transaction confirmation
+        // 2. Verify the transaction on Ethereum blockchain
+        // 3. Check that ETH was locked in the bridge contract
+        // 4. Only then execute the Aptos transaction
+        
+        // For now, we'll simulate the verification process
+        console.log('🔍 Verifying Ethereum transaction...');
+        console.log('✅ Ethereum transaction verified (simulated)');
+        
         // Execute the swap on Aptos
         const aptosResult = await aptosService.initiateSwap({
           recipient: userAddress,
-          amount: quote.toAmount,
+          amount: quoteDetails.fromAmount,
           hashlock,
           timelock,
           targetChain: fromChain
         });
         
         if (aptosResult.success) {
-          aptosTxHash = aptosResult.transactionHash;
+          console.log('🔍 Aptos result structure:', JSON.stringify(aptosResult, null, 2));
+          aptosTxHash = aptosResult.transaction?.hash;
           console.log(`✅ Aptos swap executed: ${aptosTxHash}`);
         } else {
           throw new Error(`Aptos swap failed: ${aptosResult.error}`);

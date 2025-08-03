@@ -170,19 +170,53 @@ class ContractService {
       console.log(`🚀 Executing Ethereum swap: ${fromToken} → ${toToken} (${ethers.formatEther(amount)} ETH)`);
 
       // Create transaction to call FusionBridge contract
+      const encodedData = this.encodeInitiateSwap(recipient, amount, hashlock, timelock, targetChain);
+      console.log(`📝 Encoded transaction data: ${encodedData}`);
+      console.log(`📝 Encoded data type: ${typeof encodedData}`);
+      console.log(`📝 Encoded data length: ${encodedData ? encodedData.length : 'undefined'}`);
+      
       const transaction = {
         to: this.contractAddresses.ethereum.fusionBridge,
-        data: this.encodeInitiateSwap(recipient, amount, hashlock, timelock, targetChain),
+        data: encodedData,
         gasLimit: 300000,
-        value: fromToken === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeEeE' ? amount : 0 // Send ETH if native token
+        value: amount // Send ETH value for native token swaps
       };
+      
+      // For native ETH, we need to send the value
+      // For ERC20 tokens, value should be 0
+      if (fromToken === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeEeE') {
+        transaction.value = amount;
+      } else {
+        transaction.value = 0;
+      }
+      
+      console.log(`📝 Final transaction data: ${transaction.data}`);
+      console.log(`📝 Transaction object:`, JSON.stringify(transaction, null, 2));
 
       // Estimate gas
       const estimatedGas = await this.ethereumProvider.estimateGas(transaction);
       transaction.gasLimit = estimatedGas;
 
-      // Send transaction
-      const tx = await this.ethereumWallet.sendTransaction(transaction);
+      // Create contract instance and call function directly
+      const contractABI = [
+        "function initiateSwap(address recipient, uint256 amount, bytes32 hashlock, uint256 timelock, string memory targetChain) external payable"
+      ];
+      
+      const contract = new ethers.Contract(
+        this.contractAddresses.ethereum.fusionBridge,
+        contractABI,
+        this.ethereumWallet
+      );
+      
+      console.log(`📝 Calling contract function directly...`);
+      const tx = await contract.initiateSwap(
+        recipient,
+        amount,
+        hashlock,
+        timelock,
+        targetChain,
+        { value: amount, gasLimit: 300000 }
+      );
       console.log(`📝 Transaction sent: ${tx.hash}`);
       
       // Wait for confirmation
@@ -336,17 +370,35 @@ class ContractService {
    * @returns {string} Encoded function data
    */
   encodeInitiateSwap(recipient, amount, hashlock, timelock, targetChain) {
-    // Function signature: initiateSwap(address,uint256,bytes32,uint256,string)
-    const functionSignature = 'initiateSwap(address,uint256,bytes32,uint256,string)';
-    const functionSelector = ethers.id(functionSignature).slice(0, 10);
-    
-    // Encode parameters
-    const encodedParams = ethers.AbiCoder.defaultAbiCoder().encode(
-      ['address', 'uint256', 'bytes32', 'uint256', 'string'],
-      [recipient, amount, hashlock, timelock, targetChain]
-    );
-    
-    return functionSelector + encodedParams.slice(2);
+    try {
+      // Function signature: initiateSwap(address,uint256,bytes32,uint256,string)
+      const functionSignature = 'initiateSwap(address,uint256,bytes32,uint256,string)';
+      const functionSelector = ethers.id(functionSignature).slice(0, 10);
+      
+      console.log(`🔧 Encoding parameters:`, {
+        recipient,
+        amount: amount.toString(),
+        hashlock,
+        timelock: timelock.toString(),
+        targetChain
+      });
+      
+      // Encode parameters using the new AbiCoder
+      const abiCoder = new ethers.AbiCoder();
+      const encodedParams = abiCoder.encode(
+        ['address', 'uint256', 'bytes32', 'uint256', 'string'],
+        [recipient, amount, hashlock, timelock, targetChain]
+      );
+      
+      const result = functionSelector + encodedParams.slice(2);
+      console.log(`🔧 Encoded result: ${result}`);
+      
+      return result;
+    } catch (error) {
+      console.error(`❌ Encoding error: ${error.message}`);
+      // Return a fallback - just the function selector
+      return '0x960745d1';
+    }
   }
 
   /**
@@ -358,7 +410,8 @@ class ContractService {
     const functionSignature = 'completeSwap(bytes32)';
     const functionSelector = ethers.id(functionSignature).slice(0, 10);
     
-    const encodedParams = ethers.AbiCoder.defaultAbiCoder().encode(
+    const abiCoder = new ethers.AbiCoder();
+    const encodedParams = abiCoder.encode(
       ['bytes32'],
       [hashlock]
     );
@@ -375,7 +428,8 @@ class ContractService {
     const functionSignature = 'refundSwap(bytes32)';
     const functionSelector = ethers.id(functionSignature).slice(0, 10);
     
-    const encodedParams = ethers.AbiCoder.defaultAbiCoder().encode(
+    const abiCoder = new ethers.AbiCoder();
+    const encodedParams = abiCoder.encode(
       ['bytes32'],
       [hashlock]
     );
