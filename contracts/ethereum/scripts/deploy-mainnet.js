@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("🚀 Deploying FusionBridge to Ethereum...");
+  console.log("🚀 Deploying FusionBridge to Ethereum Mainnet...");
 
   // Get the signer
   const [deployer] = await hre.ethers.getSigners();
@@ -9,46 +9,47 @@ async function main() {
   console.log("📋 Account balance:", await hre.ethers.provider.getBalance(deployer.address));
 
   // For now, we'll use a placeholder address for the Fusion+ resolver
-  // In production, this would be the actual 1inch Fusion+ resolver address
-  const fusionResolverAddress = "0x0000000000000000000000000000000000000000"; // Placeholder
+  const fusionResolverAddress = "0x0000000000000000000000000000000000000000";
 
   console.log("📋 Deploying with parameters:");
   console.log(`   Fusion+ Resolver: ${fusionResolverAddress}`);
 
   try {
-    // Deploy using the recommended ethers v6 pattern
-    console.log("🔧 Deploying contract...");
-    
+    // Get current gas price
+    console.log("🔧 Getting current gas price...");
+    const gasPrice = await hre.ethers.provider.getFeeData();
+    console.log("📊 Current gas price:", hre.ethers.formatUnits(gasPrice.gasPrice, "gwei"), "gwei");
+
     // Get the contract factory
     const FusionBridge = await hre.ethers.getContractFactory("FusionBridge");
-    
-    // Deploy the contract
-    const fusionBridge = await FusionBridge.deploy(fusionResolverAddress);
-    
-    // Wait for deployment to complete
+
+    // Deploy with explicit gas settings for mainnet
+    console.log("🔧 Deploying contract with mainnet-optimized settings...");
+    const fusionBridge = await FusionBridge.deploy(fusionResolverAddress, {
+      gasLimit: 3000000, // Higher gas limit for mainnet
+      maxFeePerGas: gasPrice.maxFeePerGas || gasPrice.gasPrice,
+      maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas || hre.ethers.parseUnits("2", "gwei")
+    });
+
     console.log("⏳ Waiting for deployment...");
     await fusionBridge.waitForDeployment();
 
-    // Get the deployed address
     const address = await fusionBridge.getAddress();
-    
     console.log("✅ FusionBridge deployed successfully!");
     console.log(`   Contract Address: ${address}`);
     console.log(`   Network: ${hre.network.name}`);
-    console.log(`   Explorer: https://${hre.network.name === 'mainnet' ? 'etherscan.io' : 'sepolia.etherscan.io'}/address/${address}`);
+    console.log(`   Explorer: https://etherscan.io/address/${address}`);
 
-    // Verify the contract on Etherscan (if not on localhost)
-    if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
-      console.log("🔍 Verifying contract on Etherscan...");
-      try {
-        await hre.run("verify:verify", {
-          address: address,
-          constructorArguments: [fusionResolverAddress],
-        });
-        console.log("✅ Contract verified on Etherscan!");
-      } catch (error) {
-        console.log("⚠️  Contract verification failed:", error.message);
-      }
+    // Verify the contract on Etherscan
+    console.log("🔍 Verifying contract on Etherscan...");
+    try {
+      await hre.run("verify:verify", {
+        address: address,
+        constructorArguments: [fusionResolverAddress],
+      });
+      console.log("✅ Contract verified on Etherscan!");
+    } catch (error) {
+      console.log("⚠️  Contract verification failed:", error.message);
     }
 
     // Log deployment info
@@ -71,4 +72,4 @@ async function main() {
 main().catch((error) => {
   console.error("❌ Deployment failed:", error);
   process.exitCode = 1;
-});
+}); 

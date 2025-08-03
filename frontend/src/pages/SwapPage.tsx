@@ -46,10 +46,20 @@ export default function SwapPage() {
     aptos?: string;
   }>({})
 
-  // Get the active wallet address for API calls
-  const getActiveWalletAddress = () => {
-    return ethereumWallet || aptosWallet
+  // Get the correct wallet address for each chain
+  const getWalletAddressForChain = (chain: string) => {
+    if (chain === 'ethereum' || chain === 'sepolia') {
+      return ethereumWallet
+    } else if (chain === 'aptos') {
+      return aptosWallet
+    }
+    return null
   }
+
+  // Get the active wallet address for API calls (deprecated - use getWalletAddressForChain instead)
+  // const getActiveWalletAddress = () => {
+  //   return ethereumWallet || aptosWallet
+  // }
 
   // Handle wallet connection
   const handleWalletConnect = async (walletType: 'metamask' | '1inch' | 'phantom' | 'coinbase' | 'petra' | 'pontem' | 'martian') => {
@@ -134,6 +144,18 @@ export default function SwapPage() {
 
   const handleSwap = async () => {
     if (!quote || !isConnected) return
+    
+    // Validate that both wallets are connected for cross-chain swaps
+    if (fromToken !== toToken) {
+      if (!ethereumWallet) {
+        alert('Please connect your Ethereum wallet (MetaMask) for cross-chain swaps')
+        return
+      }
+      if (!aptosWallet) {
+        alert('Please connect your Aptos wallet (Petra) for cross-chain swaps')
+        return
+      }
+    }
 
     setSwapStatus('swapping')
     try {
@@ -153,7 +175,9 @@ export default function SwapPage() {
         },
         body: JSON.stringify({
           quoteId: quote.id,
-          userAddress: getActiveWalletAddress(),
+          userAddress: getWalletAddressForChain(fromTokenInfo.chain), // Use getWalletAddressForChain
+          ethereumAddress: ethereumWallet,
+          aptosAddress: aptosWallet,
           fromChain: fromTokenInfo.chain,
           toChain: toTokenInfo.chain,
           fromToken: fromTokenInfo.symbol,

@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("🚀 Deploying FusionBridge to Ethereum...");
+  console.log("🚀 Deploying FusionBridge to Ethereum (Manual Method)...");
 
   // Get the signer
   const [deployer] = await hre.ethers.getSigners();
@@ -9,41 +9,49 @@ async function main() {
   console.log("📋 Account balance:", await hre.ethers.provider.getBalance(deployer.address));
 
   // For now, we'll use a placeholder address for the Fusion+ resolver
-  // In production, this would be the actual 1inch Fusion+ resolver address
-  const fusionResolverAddress = "0x0000000000000000000000000000000000000000"; // Placeholder
+  const fusionResolverAddress = "0x0000000000000000000000000000000000000000";
 
   console.log("📋 Deploying with parameters:");
   console.log(`   Fusion+ Resolver: ${fusionResolverAddress}`);
 
   try {
-    // Deploy using the recommended ethers v6 pattern
-    console.log("🔧 Deploying contract...");
-    
-    // Get the contract factory
-    const FusionBridge = await hre.ethers.getContractFactory("FusionBridge");
-    
-    // Deploy the contract
-    const fusionBridge = await FusionBridge.deploy(fusionResolverAddress);
-    
-    // Wait for deployment to complete
-    console.log("⏳ Waiting for deployment...");
-    await fusionBridge.waitForDeployment();
+    // Manual deployment approach
+    console.log("🔧 Compiling contract...");
+    await hre.run("compile");
 
-    // Get the deployed address
-    const address = await fusionBridge.getAddress();
+    console.log("🔧 Getting contract bytecode and ABI...");
+    const contractPath = "contracts/FusionBridge.sol:FusionBridge";
+    const contractArtifact = await hre.artifacts.readArtifact("FusionBridge");
     
+    console.log("🔧 Creating deployment transaction...");
+    
+    // Encode constructor parameters
+    const constructorArgs = [fusionResolverAddress];
+    const factory = new hre.ethers.ContractFactory(
+      contractArtifact.abi,
+      contractArtifact.bytecode,
+      deployer
+    );
+
+    console.log("🔧 Deploying contract...");
+    const contract = await factory.deploy(...constructorArgs);
+    
+    console.log("⏳ Waiting for deployment...");
+    await contract.waitForDeployment();
+
+    const address = await contract.getAddress();
     console.log("✅ FusionBridge deployed successfully!");
     console.log(`   Contract Address: ${address}`);
     console.log(`   Network: ${hre.network.name}`);
     console.log(`   Explorer: https://${hre.network.name === 'mainnet' ? 'etherscan.io' : 'sepolia.etherscan.io'}/address/${address}`);
 
-    // Verify the contract on Etherscan (if not on localhost)
+    // Verify the contract on Etherscan
     if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
       console.log("🔍 Verifying contract on Etherscan...");
       try {
         await hre.run("verify:verify", {
           address: address,
-          constructorArguments: [fusionResolverAddress],
+          constructorArguments: constructorArgs,
         });
         console.log("✅ Contract verified on Etherscan!");
       } catch (error) {
@@ -60,7 +68,7 @@ async function main() {
     console.log(`   Bridge Fee: 0.1% (10 basis points)`);
     console.log(`   Supported Chains: Ethereum, Aptos`);
 
-    return fusionBridge;
+    return contract;
   } catch (error) {
     console.error("❌ Deployment failed with error:", error);
     throw error;
@@ -71,4 +79,4 @@ async function main() {
 main().catch((error) => {
   console.error("❌ Deployment failed:", error);
   process.exitCode = 1;
-});
+}); 

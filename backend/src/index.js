@@ -335,18 +335,22 @@ app.get('/api/fusion/order/:orderHash', async (req, res) => {
 
 app.post('/api/bridge/execute', async (req, res) => {
   try {
-    const { quoteId, userAddress, fromChain, toChain, fromToken, toToken, fromAmount } = req.body;
+    const { quoteId, userAddress, fromChain, toChain, fromToken, toToken, fromAmount, ethereumAddress, aptosAddress } = req.body;
     
     // Validate required fields
-    if (!quoteId || !userAddress || !fromChain || !toChain || !fromToken || !toToken || !fromAmount) {
+    if (!quoteId || !fromChain || !toChain || !fromToken || !toToken || !fromAmount) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Missing required fields: quoteId, userAddress, fromChain, toChain, fromToken, toToken, fromAmount' 
+        error: 'Missing required fields: quoteId, fromChain, toChain, fromToken, toToken, fromAmount' 
       });
     }
 
-    // Validate user address format
-    if (fromChain === 'ethereum' && !tokenService.isValidAddress(userAddress, 'ethereum')) {
+    // Get the correct addresses for each chain
+    const ethereumUserAddress = ethereumAddress || userAddress;
+    const aptosUserAddress = aptosAddress || userAddress;
+    
+    // Validate Ethereum address format if we're using Ethereum
+    if (fromChain === 'ethereum' && !tokenService.isValidAddress(ethereumUserAddress, 'ethereum')) {
       return res.status(400).json({
         success: false,
         error: 'Invalid Ethereum address format'
@@ -388,45 +392,79 @@ app.post('/api/bridge/execute', async (req, res) => {
         const fromTokenInfo = tokenService.getToken(quoteDetails.fromToken, fromChain);
         const toTokenInfo = tokenService.getToken(quoteDetails.toToken, toChain);
         
-        // Use 1inch Fusion+ for real cross-chain swap
-        if (fusionService.isConfigured()) {
-          console.log('🚀 Using 1inch Fusion+ for cross-chain execution...');
+        // For cross-chain swaps (Ethereum → Aptos), extend 1inch Fusion+ to Aptos
+        if (toChain === 'aptos') {
+          console.log('🌉 Extending 1inch Fusion+ to Aptos...');
           
-          // Create Fusion+ order for cross-chain swap
-          const fusionOrder = await fusionService.createCrossChainFusionOrder({
+          // Use 1inch Fusion+ extension for Ethereum → Aptos
+          const fusionExtension = await fusionService.createCrossChainFusionOrder({
             fromToken: fromTokenInfo.address,
             toToken: toTokenInfo.address,
             fromChain,
             toChain,
             amount: tokenService.toWei(quoteDetails.fromAmount, fromTokenInfo.decimals),
-            fromAddress: userAddress,
-            toAddress: userAddress,
+            fromAddress: ethereumUserAddress,
+            toAddress: aptosUserAddress,
             slippage: 1
           });
           
-          if (fusionOrder.success) {
-            console.log('✅ Fusion+ cross-chain order created:', fusionOrder.data.orderId);
-            ethereumTxHash = fusionOrder.data.sourceOrder.quote.tx?.hash || 'pending';
+          if (fusionExtension.success) {
+            console.log('✅ 1inch Fusion+ Aptos extension created:', fusionExtension.data.orderId);
+            ethereumTxHash = fusionExtension.data.fusionOrderId || 'pending';
+            
+            // Store the hashlock and timelock for Aptos side
+            hashlock = fusionExtension.data.hashlock;
+            timelock = fusionExtension.data.timelock;
           } else {
-            throw new Error(`Fusion+ order failed: ${fusionOrder.error}`);
+            throw new Error(`1inch Fusion+ Aptos extension failed: ${fusionExtension.error}`);
           }
         } else {
-          // Fallback to direct contract execution
-          const ethereumResult = await contractService.executeSwap({
-            fromToken: fromTokenInfo.address,
-            toToken: toTokenInfo.address,
-            amount: tokenService.toWei(quoteDetails.fromAmount, fromTokenInfo.decimals),
-            recipient: userAddress,
-            hashlock,
-            timelock,
-            targetChain: toChain
-          });
-          
-          if (ethereumResult.success) {
-            ethereumTxHash = ethereumResult.transactionHash;
-            console.log(`✅ Ethereum swap executed: ${ethereumTxHash}`);
+          // For Ethereum-to-Ethereum swaps, use 1inch Fusion+
+          if (fusionService.isConfigured()) {
+            console.log('🚀 Using 1inch Fusion+ for Ethereum-to-Ethereum swap...');
+            
+            // For 1inch API, we need to use WETH instead of native ETH
+            let fromTokenAddress = fromTokenInfo.address;
+            if (fromTokenInfo.symbol === 'ETH') {
+              // Use WETH address for 1inch API
+              fromTokenAddress = tokenService.getToken('WETH', 'ethereum').address;
+              console.log(`🔄 Converting ETH to WETH for 1inch API: ${fromTokenAddress}`);
+            }
+            
+            // Create Fusion+ order for same-chain swap
+            const fusionOrder = await fusionService.createFusionOrder(
+              fromTokenAddress,
+              toTokenInfo.address,
+              tokenService.toWei(quoteDetails.fromAmount, fromTokenInfo.decimals),
+              ethereumUserAddress,
+              1
+            );
+            
+            if (fusionOrder.success) {
+              console.log('✅ Fusion+ order created:', fusionOrder.data.orderId);
+              ethereumTxHash = fusionOrder.data.tx?.hash || 'pending';
+            } else {
+              console.log('⚠️ Fusion+ order failed, falling back to direct contract execution');
+              throw new Error(`Fusion+ order failed: ${fusionOrder.error}`);
+            }
           } else {
-            throw new Error(`Ethereum swap failed: ${ethereumResult.error}`);
+            // Fallback to direct contract execution
+            const ethereumResult = await contractService.executeSwap({
+              fromToken: fromTokenInfo.address,
+              toToken: toTokenInfo.address,
+              amount: tokenService.toWei(quoteDetails.fromAmount, fromTokenInfo.decimals),
+              recipient: ethereumUserAddress,
+              hashlock,
+              timelock,
+              targetChain: toChain
+            });
+            
+            if (ethereumResult.success) {
+              ethereumTxHash = ethereumResult.transactionHash;
+              console.log(`✅ Ethereum swap executed: ${ethereumTxHash}`);
+            } else {
+              throw new Error(`Ethereum swap failed: ${ethereumResult.error}`);
+            }
           }
         }
       }
@@ -449,12 +487,12 @@ app.post('/api/bridge/execute', async (req, res) => {
         console.log('🔍 Verifying Ethereum transaction...');
         console.log('✅ Ethereum transaction verified (simulated)');
         
-        // Execute the swap on Aptos
+        // Execute the Aptos side of the 1inch Fusion+ extension
         const aptosResult = await aptosService.initiateSwap({
-          recipient: userAddress,
+          recipient: aptosUserAddress,
           amount: quoteDetails.fromAmount,
-          hashlock,
-          timelock,
+          hashlock: hashlock, // From 1inch Fusion+ extension
+          timelock: timelock, // From 1inch Fusion+ extension
           targetChain: fromChain
         });
         
@@ -474,15 +512,15 @@ app.post('/api/bridge/execute', async (req, res) => {
         status: 'executed',
         estimatedTime: '45 seconds',
         steps: [
-          { step: 1, status: 'completed', description: 'Source chain swap executed', txHash: ethereumTxHash },
-          { step: 2, status: 'completed', description: 'Destination chain swap executed', txHash: aptosTxHash },
-          { step: 3, status: 'completed', description: 'Cross-chain bridge completed' }
+          { step: 1, status: 'completed', description: '1inch Fusion+ Ethereum swap executed', txHash: ethereumTxHash },
+          { step: 2, status: 'completed', description: 'Aptos extension with hashlock/timelock executed', txHash: aptosTxHash },
+          { step: 3, status: 'completed', description: '1inch Fusion+ Aptos extension completed' }
         ],
         hashlock,
         timelock,
         ethereumTxHash,
         aptosTxHash,
-        message: 'Cross-chain swap executed successfully!'
+        message: '1inch Fusion+ Aptos extension executed successfully!'
       };
       
       res.json({ success: true, execution });

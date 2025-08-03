@@ -1,7 +1,5 @@
 require("dotenv").config({ path: require('path').resolve(__dirname, '../../.env') });
 require("@nomicfoundation/hardhat-ethers");
-require("@nomicfoundation/hardhat-ignition-ethers");
-require("@nomicfoundation/hardhat-verify");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -32,4 +30,4 @@ module.exports = {
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY
   }
-};
+}; 

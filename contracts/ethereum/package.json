@@ -7,9 +7,9 @@
     "test": "hardhat test",
     "compile": "hardhat compile",
     "build": "hardhat compile",
-    "deploy": "hardhat run scripts/deploy.js",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
-    "deploy:mainnet": "hardhat run scripts/deploy.js --network mainnet"
+    "deploy": "hardhat ignition deploy ignition/modules/FusionBridge.js",
+    "deploy:sepolia": "hardhat ignition deploy ignition/modules/FusionBridge.js --network sepolia",
+    "deploy:mainnet": "hardhat ignition deploy ignition/modules/FusionBridge.js --network mainnet"
   },
   "keywords": [
     "ethereum",
@@ -21,13 +21,20 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.14",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ignition": "^0.15.13",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@nomicfoundation/ignition-core": "^0.15.13",
     "@openzeppelin/contracts": "^5.4.0",
     "hardhat": "^2.26.1"
   },
   "dependencies": {
     "@1inch/fusion-sdk": "^2.3.5",
     "dotenv": "^17.2.1",
+    "ethers": "^6.15.0"
+  },
+  "overrides": {
     "ethers": "^6.15.0"
   }
 }
