@@ -13,8 +13,22 @@ class AptosService {
     // Initialize wallet if private key is provided
     this.privateKey = process.env.APTOS_PRIVATE_KEY;
     if (this.privateKey && this.privateKey !== 'your_aptos_private_key_here') {
-      this.account = new AptosAccount(Buffer.from(this.privateKey, 'hex'));
-      console.log(`✅ Aptos wallet configured for ${this.getNetworkName()}:`, this.account.address().toString());
+      try {
+        // Handle ed25519-priv-0x format
+        let privateKeyHex = this.privateKey;
+        if (privateKeyHex.startsWith('ed25519-priv-0x')) {
+          privateKeyHex = privateKeyHex.replace('ed25519-priv-0x', '');
+        }
+        if (privateKeyHex.startsWith('0x')) {
+          privateKeyHex = privateKeyHex.slice(2);
+        }
+        
+        this.account = new AptosAccount(Buffer.from(privateKeyHex, 'hex'));
+        console.log(`✅ Aptos wallet configured for ${this.getNetworkName()}:`, this.account.address().toString());
+      } catch (error) {
+        console.error('❌ Failed to initialize Aptos account:', error.message);
+        this.account = null;
+      }
     } else {
       console.warn('⚠️  APTOS_PRIVATE_KEY not set in environment variables');
     }

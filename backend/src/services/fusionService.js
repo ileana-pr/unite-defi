@@ -56,7 +56,7 @@ class FusionService {
       console.log(`🔍 Getting Fusion+ quote on ${this.getNetworkName()}: ${fromToken} → ${toToken} (${ethers.formatEther(amount)} ETH)`);
 
       // Get Fusion+ quote with MEV protection
-      const response = await axios.get(`${this.baseURL}/fusion/v1.0/${targetChainId}/quote`, {
+      const response = await axios.get(`${this.baseURL}/swap/v6.0/${targetChainId}/quote`, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Accept': 'application/json'
@@ -137,7 +137,7 @@ class FusionService {
       console.log(`🚀 Creating Fusion+ order on ${this.getNetworkName()}: ${fromToken} → ${toToken} (${ethers.formatEther(amount)} ETH)`);
 
       // Create Fusion+ order
-      const response = await axios.post(`${this.baseURL}/fusion/v1.0/${targetChainId}/order`, {
+      const response = await axios.post(`${this.baseURL}/swap/v6.0/${targetChainId}/swap`, {
         src: fromToken,
         dst: toToken,
         amount: amount,
@@ -312,8 +312,8 @@ class FusionService {
    */
   getIntermediateToken(chain) {
     const intermediateTokens = {
-      ethereum: '0xA0b86a33E6441b8C4C8C8C8C8C8C8C8C8C8C8C8', // USDC
-      aptos: '0x1::coin::T<0x1::aptos_coin::AptosCoin>' // USDC on Aptos
+      ethereum: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeEeE', // Native ETH
+      aptos: '0x1::coin::USDC' // Aptos testnet USDC
     };
     return intermediateTokens[chain] || intermediateTokens.ethereum;
   }
@@ -397,8 +397,8 @@ class FusionService {
 
       // Test with a simple quote request
       const testQuote = await this.getFusionQuote(
-        '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeEeE', // ETH
-        '0xA0b86a33E6441b8C4C8C8C8C8C8C8C8C8C8C8C8',   // USDC
+        '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeEeE', // Native ETH
+        '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
         ethers.parseEther('0.001'), // 0.001 ETH
         '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
         this.chainId

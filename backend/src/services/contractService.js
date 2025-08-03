@@ -142,6 +142,74 @@ class ContractService {
   }
 
   /**
+   * Execute a cross-chain swap on Ethereum
+   * @param {Object} params - Swap parameters
+   * @returns {Promise<Object>} Transaction result
+   */
+  async executeSwap(params) {
+    const {
+      fromToken,
+      toToken,
+      amount,
+      recipient,
+      hashlock,
+      timelock,
+      targetChain
+    } = params;
+
+    try {
+      if (!this.ethereumWallet) {
+        throw new Error('Ethereum wallet not configured. Please set PRIVATE_KEY in .env file');
+      }
+
+      // Check if we have a deployed contract address
+      if (this.contractAddresses.ethereum.fusionBridge === '0x0000000000000000000000000000000000000000') {
+        throw new Error(`FusionBridge contract not deployed on ${this.getNetworkName()}. Please deploy contracts first and set ETHEREUM_BRIDGE_ADDRESS`);
+      }
+
+      console.log(`🚀 Executing Ethereum swap: ${fromToken} → ${toToken} (${ethers.formatEther(amount)} ETH)`);
+
+      // Create transaction to call FusionBridge contract
+      const transaction = {
+        to: this.contractAddresses.ethereum.fusionBridge,
+        data: this.encodeInitiateSwap(recipient, amount, hashlock, timelock, targetChain),
+        gasLimit: 300000,
+        value: fromToken === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeEeE' ? amount : 0 // Send ETH if native token
+      };
+
+      // Estimate gas
+      const estimatedGas = await this.ethereumProvider.estimateGas(transaction);
+      transaction.gasLimit = estimatedGas;
+
+      // Send transaction
+      const tx = await this.ethereumWallet.sendTransaction(transaction);
+      console.log(`📝 Transaction sent: ${tx.hash}`);
+      
+      // Wait for confirmation
+      const receipt = await tx.wait();
+
+      return {
+        success: true,
+        transactionHash: receipt.hash,
+        transaction: {
+          hash: receipt.hash,
+          status: receipt.status === 1 ? 'success' : 'failed',
+          gasUsed: receipt.gasUsed.toString(),
+          blockNumber: receipt.blockNumber,
+          network: this.getNetworkName()
+        },
+        message: `Swap executed successfully on ${this.getNetworkName()}`
+      };
+    } catch (error) {
+      console.error('Execute swap error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Complete a swap on Ethereum
    * @param {string} hashlock - The hashlock of the swap
    * @returns {Promise<Object>} Transaction result

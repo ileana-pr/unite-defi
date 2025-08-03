@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { ArrowLeftRight, Wallet, Shield, Zap, CheckCircle, AlertCircle } from 'lucide-react'
+import { ArrowLeftRight, Wallet, Shield, Zap, CheckCircle, AlertCircle, Info, Search } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useCrossChainWallet } from '@/hooks/useCrossChainWallet'
 
@@ -91,6 +91,15 @@ export default function SwapPage() {
 
     setLoading(true)
     try {
+      // Determine chains based on selected tokens
+      const fromTokenInfo = tokens.find(t => t.symbol === fromToken);
+      const toTokenInfo = tokens.find(t => t.symbol === toToken);
+      
+      if (!fromTokenInfo || !toTokenInfo) {
+        console.error('Token info not found');
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/bridge/quote`, {
         method: 'POST',
         headers: {
@@ -100,8 +109,8 @@ export default function SwapPage() {
           fromToken,
           toToken,
           fromAmount,
-          fromChain: 'ethereum',
-          toChain: 'aptos',
+          fromChain: fromTokenInfo.chain,
+          toChain: toTokenInfo.chain,
         }),
       })
 
@@ -124,6 +133,15 @@ export default function SwapPage() {
 
     setSwapStatus('swapping')
     try {
+      // Determine chains based on selected tokens
+      const fromTokenInfo = tokens.find(t => t.symbol === fromToken);
+      const toTokenInfo = tokens.find(t => t.symbol === toToken);
+      
+      if (!fromTokenInfo || !toTokenInfo) {
+        console.error('Token info not found');
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/bridge/execute`, {
         method: 'POST',
         headers: {
@@ -132,8 +150,8 @@ export default function SwapPage() {
         body: JSON.stringify({
           quoteId: quote.id,
           userAddress: getActiveWalletAddress(),
-          fromChain: 'ethereum',
-          toChain: 'aptos',
+          fromChain: fromTokenInfo.chain,
+          toChain: toTokenInfo.chain,
         }),
       })
 
@@ -303,7 +321,7 @@ export default function SwapPage() {
                       className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                     >
                       {tokens.map((token) => (
-                        <option key={token.symbol} value={token.symbol}>
+                        <option key={`${token.symbol}-${token.chain}`} value={token.symbol}>
                           {token.symbol} - {token.name}
                         </option>
                       ))}
@@ -345,7 +363,7 @@ export default function SwapPage() {
                       className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                     >
                       {tokens.map((token) => (
-                        <option key={token.symbol} value={token.symbol}>
+                        <option key={`${token.symbol}-${token.chain}`} value={token.symbol}>
                           {token.symbol} - {token.name}
                         </option>
                       ))}
@@ -367,11 +385,40 @@ export default function SwapPage() {
                 </div>
               </div>
 
+              {/* Get Quote Button */}
+              <Button
+                onClick={fetchQuote}
+                disabled={!isConnected || !fromAmount || !fromToken || !toToken || loading}
+                className="w-full mt-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
+              >
+                {loading ? (
+                  <>
+                    <Zap className="w-4 h-4 mr-2 animate-spin" />
+                    Getting Quote...
+                  </>
+                ) : !isConnected ? (
+                  <>
+                    <Wallet className="w-4 h-4 mr-2" />
+                    Connect Wallet
+                  </>
+                ) : !fromAmount || !fromToken || !toToken ? (
+                  <>
+                    <Info className="w-4 h-4 mr-2" />
+                    Enter Amount and Select Tokens
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4 mr-2" />
+                    Get Quote
+                  </>
+                )}
+              </Button>
+
               {/* Swap Button */}
               <Button
                 onClick={handleSwap}
                 disabled={!isConnected || !quote || loading || swapStatus === 'swapping'}
-                className="w-full mt-6 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+                className="w-full mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
               >
                 {swapStatus === 'swapping' ? (
                   <>
@@ -382,6 +429,11 @@ export default function SwapPage() {
                   <>
                     <Wallet className="w-4 h-4 mr-2" />
                     Connect Wallet
+                  </>
+                ) : !quote ? (
+                  <>
+                    <Info className="w-4 h-4 mr-2" />
+                    Get Quote First
                   </>
                 ) : (
                   <>

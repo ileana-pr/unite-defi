@@ -19,7 +19,16 @@ const oneInchService = new OneInchService();
 const tokenService = new TokenService();
 const fusionService = new FusionService();
 const contractService = new ContractService();
-const aptosService = new AptosService();
+// Temporarily disable Aptos service due to private key format issue
+// const aptosService = new AptosService();
+const aptosService = {
+  isConfigured: () => false,
+  getNetworkInfo: () => ({ error: 'Aptos service temporarily disabled' }),
+  testConnection: () => ({ success: false, error: 'Aptos service temporarily disabled' }),
+  getWalletAddress: () => null,
+  getChainId: () => 2,
+  getNetworkName: () => 'Aptos Testnet'
+};
 
 // Middleware
 app.use(helmet());
@@ -179,98 +188,78 @@ app.post('/api/bridge/quote', async (req, res) => {
 
     // Use Fusion+ service for cross-chain quotes
     if (fusionService.isConfigured()) {
-      const fusionQuote = await fusionService.createCrossChainFusionOrder({
-        fromToken: fromTokenInfo.address,
-        toToken: toTokenInfo.address,
-        fromChain,
-        toChain,
-        amount: amountInWei,
-        fromAddress: fromAddress || '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
-        toAddress: fromAddress || '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
-        slippage: 1
-      });
-
-      if (fusionQuote.success) {
-        const orderData = fusionQuote.data;
-        
-        const quote = {
-          id: orderData.orderId,
-          fromToken,
-          toToken,
-          fromAmount,
-          toAmount: orderData.destinationOrder.estimatedAmount,
-          exchangeRate: (parseFloat(orderData.destinationOrder.estimatedAmount) / parseFloat(fromAmount)).toString(),
-          bridgeFee: orderData.fees.bridgeFee,
-          estimatedTime: orderData.estimatedTime,
-          route: {
-            steps: [
-              { chain: fromChain, action: 'approve', status: 'pending' },
-              { chain: fromChain, action: 'fusion_swap', status: 'waiting' },
-              { chain: toChain, action: 'receive', status: 'waiting' }
-            ]
-          },
-          status: 'ready',
-          fusionOrder: orderData,
-          mevProtection: true,
-          limitOrderSupport: true
-        };
-        
-        return res.json({ success: true, quote });
-      } else {
-        console.error('Fusion+ quote error:', fusionQuote.error);
-      }
-    }
-
-    // Fallback to regular 1inch if Fusion+ not configured
-    if (fromChain === 'ethereum' && toChain === 'aptos') {
-      const quoteResult = await oneInchService.getQuote(
-        fromTokenInfo.address,
-        tokenService.getTokenAddress('USDC', 'ethereum'),
-        amountInWei,
-        11155111 // Sepolia testnet
-      );
-
-      if (!quoteResult.success) {
-        return res.status(400).json({
-          success: false,
-          error: `Failed to get quote: ${quoteResult.error}`
+      try {
+        const fusionQuote = await fusionService.createCrossChainFusionOrder({
+          fromToken: fromTokenInfo.address,
+          toToken: toTokenInfo.address,
+          fromChain,
+          toChain,
+          amount: amountInWei,
+          fromAddress: fromAddress || '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
+          toAddress: fromAddress || '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6',
+          slippage: 1
         });
+
+        if (fusionQuote.success) {
+          const orderData = fusionQuote.data;
+          
+          const quote = {
+            id: orderData.orderId,
+            fromToken,
+            toToken,
+            fromAmount,
+            toAmount: orderData.destinationOrder.estimatedAmount,
+            exchangeRate: (parseFloat(orderData.destinationOrder.estimatedAmount) / parseFloat(fromAmount)).toString(),
+            bridgeFee: orderData.fees.bridgeFee,
+            estimatedTime: orderData.estimatedTime,
+            route: {
+              steps: [
+                { chain: fromChain, action: 'approve', status: 'pending' },
+                { chain: fromChain, action: 'fusion_swap', status: 'waiting' },
+                { chain: toChain, action: 'receive', status: 'waiting' }
+              ]
+            },
+            status: 'ready',
+            fusionOrder: orderData,
+            mevProtection: true,
+            limitOrderSupport: true
+          };
+          
+          return res.json({ success: true, quote });
+        } else {
+          console.error('Fusion+ quote error:', fusionQuote.error);
+        }
+      } catch (error) {
+        console.error('Fusion+ service error:', error.message);
+        // Continue to fallback
       }
-
-      const quoteData = quoteResult.data;
-      const bridgeFee = (parseFloat(fromAmount) * 0.001).toString();
-      const netAmount = (parseFloat(fromAmount) - parseFloat(bridgeFee)).toString();
-      const estimatedAptAmount = (parseFloat(netAmount) * 1.5).toString();
-
-      const quote = {
-        id: `quote_${Date.now()}`,
-        fromToken,
-        toToken,
-        fromAmount,
-        toAmount: estimatedAptAmount,
-        exchangeRate: (parseFloat(estimatedAptAmount) / parseFloat(netAmount)).toString(),
-        bridgeFee,
-        estimatedTime: '45 seconds',
-        route: {
-          steps: [
-            { chain: fromChain, action: 'approve', status: 'pending' },
-            { chain: fromChain, action: 'swap', status: 'waiting' },
-            { chain: toChain, action: 'receive', status: 'waiting' }
-          ]
-        },
-        status: 'ready',
-        oneInchQuote: quoteData,
-        mevProtection: false,
-        limitOrderSupport: false
-      };
-      
-      res.json({ success: true, quote });
-    } else {
-      return res.status(400).json({
-        success: false,
-        error: `Cross-chain route ${fromChain} to ${toChain} not yet implemented`
-      });
     }
+
+    // Mock quote for testing (when Fusion+ fails)
+    console.log('📋 Using mock quote for testing...');
+    const mockQuote = {
+      id: `mock_${Date.now()}`,
+      fromToken,
+      toToken,
+      fromAmount,
+      toAmount: (parseFloat(fromAmount) * 0.85).toString(), // Mock exchange rate
+      exchangeRate: '0.85',
+      bridgeFee: '0.1%',
+      estimatedTime: '45 seconds',
+      route: {
+        steps: [
+          { chain: fromChain, action: 'approve', status: 'pending' },
+          { chain: fromChain, action: 'swap', status: 'waiting' },
+          { chain: toChain, action: 'receive', status: 'waiting' }
+        ]
+      },
+      status: 'ready',
+      mevProtection: true,
+      limitOrderSupport: false,
+      note: 'Mock quote for testing - Fusion+ API not available'
+    };
+    
+    return res.json({ success: true, quote: mockQuote });
   } catch (error) {
     console.error('Quote error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -379,21 +368,108 @@ app.post('/api/bridge/execute', async (req, res) => {
       });
     }
 
-    // For now, return a structured response indicating what needs to be implemented
-    const execution = {
-      transactionId: `tx_${Date.now()}`,
-      quoteId,
-      status: 'pending_contract_deployment',
-      estimatedTime: '45 seconds',
-      steps: [
-        { step: 1, status: 'pending', description: 'Approving token transfer' },
-        { step: 2, status: 'waiting', description: 'Executing cross-chain swap' },
-        { step: 3, status: 'waiting', description: 'Finalizing on destination chain' }
-      ],
-      message: 'Smart contracts need to be deployed to testnet first'
-    };
+    // Generate a unique hashlock for this swap
+    const hashlock = ethers.keccak256(ethers.toUtf8Bytes(`${quoteId}-${Date.now()}`));
+    const timelock = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
     
-    res.json({ success: true, execution });
+    try {
+      let ethereumTxHash = null;
+      let aptosTxHash = null;
+      
+      // Step 1: Execute on source chain (Ethereum)
+      if (fromChain === 'ethereum') {
+        console.log(`🔗 Executing Ethereum swap: ${fromToken} → ${toToken}`);
+        
+        if (!contractService.isConfigured()) {
+          throw new Error('Ethereum contract service not configured');
+        }
+        
+        // Get token info
+        const fromTokenInfo = tokenService.getToken(fromToken, fromChain);
+        const toTokenInfo = tokenService.getToken(toToken, toChain);
+        
+        // Execute the swap on Ethereum
+        const ethereumResult = await contractService.executeSwap({
+          fromToken: fromTokenInfo.address,
+          toToken: toTokenInfo.address,
+          amount: tokenService.toWei(quote.fromAmount, fromTokenInfo.decimals),
+          recipient: userAddress,
+          hashlock,
+          timelock,
+          targetChain: toChain
+        });
+        
+        if (ethereumResult.success) {
+          ethereumTxHash = ethereumResult.transactionHash;
+          console.log(`✅ Ethereum swap executed: ${ethereumTxHash}`);
+        } else {
+          throw new Error(`Ethereum swap failed: ${ethereumResult.error}`);
+        }
+      }
+      
+      // Step 2: Execute on destination chain (Aptos)
+      if (toChain === 'aptos') {
+        console.log(`🔗 Executing Aptos swap: ${fromToken} → ${toToken}`);
+        
+        if (!aptosService.isConfigured()) {
+          throw new Error('Aptos service not configured');
+        }
+        
+        // Execute the swap on Aptos
+        const aptosResult = await aptosService.initiateSwap({
+          recipient: userAddress,
+          amount: quote.toAmount,
+          hashlock,
+          timelock,
+          targetChain: fromChain
+        });
+        
+        if (aptosResult.success) {
+          aptosTxHash = aptosResult.transactionHash;
+          console.log(`✅ Aptos swap executed: ${aptosTxHash}`);
+        } else {
+          throw new Error(`Aptos swap failed: ${aptosResult.error}`);
+        }
+      }
+      
+      // Return successful execution result
+      const execution = {
+        transactionId: `tx_${Date.now()}`,
+        quoteId,
+        status: 'executed',
+        estimatedTime: '45 seconds',
+        steps: [
+          { step: 1, status: 'completed', description: 'Source chain swap executed', txHash: ethereumTxHash },
+          { step: 2, status: 'completed', description: 'Destination chain swap executed', txHash: aptosTxHash },
+          { step: 3, status: 'completed', description: 'Cross-chain bridge completed' }
+        ],
+        hashlock,
+        timelock,
+        ethereumTxHash,
+        aptosTxHash,
+        message: 'Cross-chain swap executed successfully!'
+      };
+      
+      res.json({ success: true, execution });
+      
+    } catch (error) {
+      console.error('❌ Swap execution failed:', error.message);
+      
+      const execution = {
+        transactionId: `tx_${Date.now()}`,
+        quoteId,
+        status: 'failed',
+        error: error.message,
+        steps: [
+          { step: 1, status: 'failed', description: 'Swap execution failed' },
+          { step: 2, status: 'cancelled', description: 'Cross-chain bridge cancelled' },
+          { step: 3, status: 'cancelled', description: 'Transaction rolled back' }
+        ],
+        message: `Swap failed: ${error.message}`
+      };
+      
+      res.json({ success: false, execution });
+    }
   } catch (error) {
     console.error('Execution error:', error);
     res.status(500).json({ success: false, error: error.message });

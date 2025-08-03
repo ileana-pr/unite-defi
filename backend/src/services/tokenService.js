@@ -2,6 +2,8 @@ const { ethers } = require('ethers');
 
 class TokenService {
   constructor() {
+    this.network = process.env.NETWORK || 'mainnet';
+    
     // Ethereum mainnet token addresses
     this.ethereumTokens = {
       ETH: {
@@ -12,7 +14,7 @@ class TokenService {
         chain: 'ethereum',
         logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png'
       },
-      USDC: {
+      USDC_ETH: {
         address: '0xA0b86a33E6441b8C4C8C8C8C8C8C8C8C8C8C8C8',
         symbol: 'USDC',
         name: 'USD Coin',
@@ -48,13 +50,66 @@ class TokenService {
         chain: 'aptos',
         logo: 'https://cryptologos.cc/logos/aptos-apt-logo.png'
       },
-      USDC: {
+      USDC_APT: {
         address: '0x1::coin::T<0x1::aptos_coin::AptosCoin>',
         symbol: 'USDC',
         name: 'USD Coin',
         decimals: 6,
         chain: 'aptos',
         logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png'
+      }
+    };
+
+    // Testnet token addresses
+    this.testnetTokens = {
+      ethereum: {
+        ETH: {
+          address: '0x0000000000000000000000000000000000000000', // Native ETH
+          symbol: 'ETH',
+          name: 'Ethereum',
+          decimals: 18,
+          chain: 'ethereum',
+          testnet: true,
+          logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png'
+        },
+        USDC_ETH: {
+          address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
+          symbol: 'USDC',
+          name: 'USD Coin',
+          decimals: 6,
+          chain: 'ethereum',
+          testnet: true,
+          logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png'
+        },
+        WETH: {
+          address: '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9', // Sepolia WETH
+          symbol: 'WETH',
+          name: 'Wrapped Ethereum',
+          decimals: 18,
+          chain: 'ethereum',
+          testnet: true,
+          logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png'
+        }
+      },
+      aptos: {
+        APT: {
+          address: '0x1::aptos_coin::AptosCoin', // Native APT
+          symbol: 'APT',
+          name: 'Aptos',
+          decimals: 8,
+          chain: 'aptos',
+          testnet: true,
+          logo: 'https://cryptologos.cc/logos/aptos-apt-logo.png'
+        },
+        USDC_APT: {
+          address: '0x1::coin::USDC', // Aptos Testnet USDC
+          symbol: 'USDC',
+          name: 'USD Coin',
+          decimals: 6,
+          chain: 'aptos',
+          testnet: true,
+          logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png'
+        }
       }
     };
   }
@@ -66,6 +121,10 @@ class TokenService {
    * @returns {Object|null} Token information or null if not found
    */
   getToken(symbol, chain) {
+    if (this.network === 'testnet') {
+      const testnetTokens = this.testnetTokens[chain];
+      return testnetTokens[symbol] || null;
+    }
     const tokens = chain === 'ethereum' ? this.ethereumTokens : this.aptosTokens;
     return tokens[symbol] || null;
   }
@@ -76,6 +135,10 @@ class TokenService {
    * @returns {Array} Array of token objects
    */
   getTokensForChain(chain) {
+    if (this.network === 'testnet') {
+      const testnetTokens = this.testnetTokens[chain];
+      return Object.values(testnetTokens);
+    }
     const tokens = chain === 'ethereum' ? this.ethereumTokens : this.aptosTokens;
     return Object.values(tokens);
   }
@@ -85,6 +148,12 @@ class TokenService {
    * @returns {Array} Array of all token objects
    */
   getAllTokens() {
+    if (this.network === 'testnet') {
+      return [
+        ...Object.values(this.testnetTokens.ethereum),
+        ...Object.values(this.testnetTokens.aptos)
+      ];
+    }
     return [
       ...Object.values(this.ethereumTokens),
       ...Object.values(this.aptosTokens)

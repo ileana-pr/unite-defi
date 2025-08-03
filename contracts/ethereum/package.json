@@ -11,7 +11,12 @@
     "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "deploy:mainnet": "hardhat run scripts/deploy.js --network mainnet"
   },
-  "keywords": ["ethereum", "bridge", "defi", "1inch"],
+  "keywords": [
+    "ethereum",
+    "bridge",
+    "defi",
+    "1inch"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -22,6 +27,7 @@
   },
   "dependencies": {
     "@1inch/fusion-sdk": "^2.3.5",
+    "dotenv": "^17.2.1",
     "ethers": "^6.15.0"
   }
 }
